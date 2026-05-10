@@ -8,6 +8,7 @@ import { AttributeStore } from './otel/attributes';
 import { setupOpenTelemetry } from './otel/setup';
 import { registerOtelInstrumentations } from './instrumentation/otel';
 import { enableCustomInstrumentations } from './instrumentation/custom';
+import { enableFetchTracePropagation } from './instrumentation/fetch-propagation';
 import { OpenTelemetryRumInstance } from './instance';
 
 export type { AttributeValue, Attributes, Counter, Gauge, Histogram, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle } from './types';
@@ -54,7 +55,9 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       isolator
     );
     const otelInstrumentations = registerOtelInstrumentations(normalized);
+    const instance = new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, []);
     const cleanup = [
+      enableFetchTracePropagation(normalized, () => instance.getActiveSpanContext()),
       ...otelInstrumentations.map((instrumentation) => () => instrumentation.disable()),
       ...enableCustomInstrumentations({
         tracer: runtime.tracer,
@@ -65,8 +68,8 @@ export function start(appName: string, authToken: string, options?: RumOptions):
         isolator
       })
     ];
-
-    return setActiveInstance(new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, cleanup));
+    instance.addCleanup(cleanup);
+    return setActiveInstance(instance);
   }, createNoopRumInstance());
 }
 

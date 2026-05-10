@@ -42,6 +42,10 @@ export class OpenTelemetryRumInstance implements RumInstance {
     this.log = log;
   }
 
+  addCleanup(cleanup: Array<() => void>): void {
+    this.cleanup.push(...cleanup);
+  }
+
   counter(name: string): Counter {
     return this.isolator.guard('counter', () => {
       const existing = this.counters.get(name);
@@ -113,6 +117,10 @@ export class OpenTelemetryRumInstance implements RumInstance {
     this.isolator.guard('add-event', () => {
       this.activeSpans[this.activeSpans.length - 1]?.span.addEvent(name, this.attributes.current(attributes) as never);
     }, undefined);
+  }
+
+  getActiveSpanContext() {
+    return this.activeSpans[this.activeSpans.length - 1]?.span.spanContext();
   }
 
   setGlobalAttribute(key: string, value: AttributeValue): void {
