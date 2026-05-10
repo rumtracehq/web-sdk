@@ -1,0 +1,82 @@
+{
+  "name": "rum-web-sdk",
+  "version": "0.1.0",
+  "description": "Browser RUM SDK built on OpenTelemetry JS.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react-router": {
+      "types": "./dist/react-router.d.ts",
+      "import": "./dist/react-router.js",
+      "require": "./dist/react-router.cjs"
+    },
+    "./next-pages-router": {
+      "types": "./dist/next-pages-router.d.ts",
+      "import": "./dist/next-pages-router.js",
+      "require": "./dist/next-pages-router.cjs"
+    },
+    "./next-app-router": {
+      "types": "./dist/next-app-router.d.ts",
+      "import": "./dist/next-app-router.js",
+      "require": "./dist/next-app-router.cjs"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/react-router.ts src/next-pages-router.ts src/next-app-router.ts --format esm,cjs --dts --sourcemap --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/exporter-logs-otlp-proto": "0.217.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "0.217.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.217.0",
+    "@opentelemetry/instrumentation": "0.217.0",
+    "@opentelemetry/instrumentation-document-load": "0.62.0",
+    "@opentelemetry/instrumentation-fetch": "0.217.0",
+    "@opentelemetry/instrumentation-user-interaction": "0.61.0",
+    "@opentelemetry/instrumentation-xml-http-request": "0.217.0",
+    "@opentelemetry/resources": "2.7.1",
+    "@opentelemetry/sdk-logs": "0.217.0",
+    "@opentelemetry/sdk-metrics": "2.7.1",
+    "@opentelemetry/sdk-trace-base": "2.7.1",
+    "@opentelemetry/sdk-trace-web": "2.7.1",
+    "@opentelemetry/semantic-conventions": "1.40.0",
+    "web-vitals": "5.2.0"
+  },
+  "peerDependencies": {
+    "next": ">=16.2.6",
+    "react": ">=19.2.6",
+    "react-router": ">=7.15.0"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "25.6.2",
+    "fast-check": "4.7.0",
+    "happy-dom": "20.9.0",
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.5"
+  }
+}
