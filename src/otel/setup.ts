@@ -2,15 +2,14 @@ import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { metrics, trace } from '@opentelemetry/api';
 import type { Attributes } from '../types';
 import type { NormalizedOptions } from '../core/options';
 import { RumAttributeSpanProcessor } from './span-processor';
 import { SDK_VERSION } from '../version';
+import { HttpTelemetryExporter, RumLogExporter, RumMetricExporter, RumSpanExporter } from '../pipeline/exporter';
+import { ErrorIsolator } from '../core/error-isolator';
 
 export interface OTelRuntime {
   tracerProvider: WebTracerProvider;
@@ -26,7 +25,8 @@ export function setupOpenTelemetry(
   token: string,
   options: NormalizedOptions,
   resourceAttributes: Attributes,
-  spanAttributes: () => Attributes
+  spanAttributes: () => Attributes,
+  isolator: ErrorIsolator = new ErrorIsolator()
 ): OTelRuntime {
   const resource = resourceFromAttributes({
     'service.name': appName,
@@ -36,20 +36,16 @@ export function setupOpenTelemetry(
     'deployment.environment': options.environment,
     ...resourceAttributes
   });
-  const headers = exporterHeaders(token, options.headers);
-
-  const traceExporter = new OTLPTraceExporter({
-    url: `${options.collectorUrl}/v1/traces`,
-    headers
+  const httpExporter = new HttpTelemetryExporter({
+    collectorUrl: options.collectorUrl,
+    authToken: token,
+    headers: options.headers,
+    beforeSend: options.beforeSend,
+    isolator
   });
-  const logExporter = new OTLPLogExporter({
-    url: `${options.collectorUrl}/v1/logs`,
-    headers
-  });
-  const metricExporter = new OTLPMetricExporter({
-    url: `${options.collectorUrl}/v1/metrics`,
-    headers
-  });
+  const traceExporter = new RumSpanExporter(httpExporter);
+  const logExporter = new RumLogExporter(httpExporter);
+  const metricExporter = new RumMetricExporter(httpExporter);
 
   const tracerProvider = new WebTracerProvider({
     resource,
@@ -76,13 +72,5 @@ export function setupOpenTelemetry(
     tracer: trace.getTracer('rum-web-sdk', SDK_VERSION),
     logger: loggerProvider.getLogger('rum-web-sdk', SDK_VERSION),
     meter: meterProvider.getMeter('rum-web-sdk', SDK_VERSION)
-  };
-}
-
-function exporterHeaders(token: string, extraHeaders: Record<string, string>): Record<string, string> {
-  const hasAuthorizationOverride = Object.keys(extraHeaders).some((key) => key.toLowerCase() === 'authorization');
-  return {
-    ...(hasAuthorizationOverride ? {} : { Authorization: `Bearer ${token}` }),
-    ...extraHeaders
   };
 }

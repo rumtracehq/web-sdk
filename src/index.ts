@@ -13,14 +13,21 @@ import { OpenTelemetryRumInstance } from './instance';
 export type { AttributeValue, Attributes, Counter, Gauge, Histogram, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle } from './types';
 export { redactHeaders, redactInteractionText, redactUrl } from './core/redactor';
 
+declare global {
+  interface Window {
+    __rumWebSdkInstance?: RumInstance;
+  }
+}
+
 let activeInstance: RumInstance | undefined;
 
 export function start(appName: string, authToken: string, options?: RumOptions): RumInstance {
   const isolator = new ErrorIsolator();
   return isolator.guard('start', () => {
-    if (activeInstance) {
+    const existing = getActiveInstance();
+    if (existing) {
       isolator.warn('duplicate-start', 'rumtrace.start() was called more than once; returning the first instance');
-      return activeInstance;
+      return existing;
     }
 
     if (typeof appName !== 'string' || appName.trim() === '' || typeof authToken !== 'string' || authToken.trim() === '') {
@@ -33,8 +40,7 @@ export function start(appName: string, authToken: string, options?: RumOptions):
 
     const session = new SessionManager(normalized.sampleRate);
     if (!session.sampled) {
-      activeInstance = createNoopRumInstance();
-      return activeInstance;
+      return setActiveInstance(createNoopRumInstance());
     }
 
     const users = new UserIdentifierStore(isolator);
@@ -44,7 +50,8 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       authToken,
       normalized,
       { 'session.id': session.id, 'session.sampled': session.sampled },
-      () => attributes.current()
+      () => attributes.current(),
+      isolator
     );
     const otelInstrumentations = registerOtelInstrumentations(normalized);
     const cleanup = [
@@ -59,9 +66,18 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       })
     ];
 
-    activeInstance = new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, cleanup);
-    return activeInstance;
+    return setActiveInstance(new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, cleanup));
   }, createNoopRumInstance());
+}
+
+function getActiveInstance(): RumInstance | undefined {
+  return activeInstance ?? (typeof window === 'undefined' ? undefined : window.__rumWebSdkInstance);
+}
+
+function setActiveInstance(instance: RumInstance): RumInstance {
+  activeInstance = instance;
+  if (typeof window !== 'undefined') window.__rumWebSdkInstance = instance;
+  return instance;
 }
 
 export const rumtrace = { start };

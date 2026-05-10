@@ -35,18 +35,17 @@
   "scripts": {
     "build": "tsup src/index.ts src/react-router.ts src/next-pages-router.ts src/next-app-router.ts --format esm,cjs --dts --sourcemap --clean",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "size": "size-limit"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-logs-otlp-proto": "0.217.0",
-    "@opentelemetry/exporter-metrics-otlp-proto": "0.217.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "0.217.0",
     "@opentelemetry/instrumentation": "0.217.0",
     "@opentelemetry/instrumentation-document-load": "0.62.0",
     "@opentelemetry/instrumentation-fetch": "0.217.0",
     "@opentelemetry/instrumentation-user-interaction": "0.61.0",
     "@opentelemetry/instrumentation-xml-http-request": "0.217.0",
+    "@opentelemetry/otlp-transformer": "0.217.0",
     "@opentelemetry/resources": "2.7.1",
     "@opentelemetry/sdk-logs": "0.217.0",
     "@opentelemetry/sdk-metrics": "2.7.1",
@@ -72,9 +71,16 @@
     }
   },
   "devDependencies": {
+    "@size-limit/preset-small-lib": "12.1.0",
     "@types/node": "25.6.2",
+    "fake-indexeddb": "6.2.5",
     "fast-check": "4.7.0",
     "happy-dom": "20.9.0",
+    "protobufjs": "8.2.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-router": "7.15.0",
+    "size-limit": "12.1.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
     "vitest": "4.1.5"
