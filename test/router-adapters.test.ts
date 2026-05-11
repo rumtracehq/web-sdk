@@ -19,11 +19,11 @@ describe('router adapter helpers', () => {
   test('trackNextAppNavigation emits routeChange with app router attributes', () => {
     const rum = fakeRum();
 
-    trackNextAppNavigation(rum, { pathname: '/products/123', search: 'tab=reviews', pattern: '/products/[id]' });
+    trackNextAppNavigation(rum, { pathname: '/products/123', search: 'tab=reviews&token=secret', pattern: '/products/[id]' });
 
     expect(rum.startSpan).toHaveBeenCalledWith('routeChange', {
       'next.router': 'app',
-      'route.url': '/products/123?tab=reviews',
+      'route.url': '/products/123?tab=reviews&token=%5BREDACTED%5D',
       'route.pattern': '/products/[id]'
     });
   });

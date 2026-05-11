@@ -1,11 +1,11 @@
-# rum-web-sdk
+# @rumtrace/web-sdk
 
 Browser Real User Monitoring SDK built on the official OpenTelemetry JavaScript packages.
 
 The SDK exposes one primary entry point:
 
 ```ts
-import rumtrace from 'rum-web-sdk';
+import rumtrace from '@rumtrace/web-sdk';
 
 const rum = rumtrace.start('my web app', 'collector-token', {
   collectorUrl: 'https://collector.example.com/otlp',
@@ -23,7 +23,7 @@ It sends OTLP/HTTP protobuf telemetry to:
 ## Install
 
 ```sh
-npm install rum-web-sdk
+npm install @rumtrace/web-sdk
 ```
 
 Optional router integrations use peer dependencies from the host app:
@@ -48,7 +48,7 @@ SDK-owned code focuses on the RUM facade, session/user attributes, error isolati
 ## Basic Usage
 
 ```ts
-import { start } from 'rum-web-sdk';
+import { start } from '@rumtrace/web-sdk';
 
 const rum = start('checkout-web', 'theirToken', {
   collectorUrl: 'https://collector.example.com/otlp',
@@ -89,11 +89,14 @@ rum.histogram('checkout.duration').record(842);
 | `release` | `undefined` | Resource attribute `service.version`. |
 | `enabledInstrumentations` | core browser instrumentations | Limits which instrumentations are registered. |
 | `propagateTraceHeaders` | `false` | Enables trace header propagation for allowed network destinations. |
-| `propagateTraceHeadersAllowList` | `[]` | String or RegExp URL allow-list for propagation. |
+| `propagateTraceHeadersAllowList` | `[]` | String or RegExp URL allow-list for propagation. String entries match exact origins or URL path prefixes after `new URL(entry, location.href)` normalization. |
 | `captureBodies` | `false` | Reserved for network body capture. Bodies are not captured by default. |
 | `redact.urlQueryKeys` | built-in sensitive list | Additional query-string keys to redact. |
-| `redact.headerKeys` | `[]` | Header keys to drop from emitted telemetry. |
-| `beforeSend` | `undefined` | Reserved hook for final record filtering/mutation. |
+| `beforeSendBatch` | `undefined` | Receives encoded batch metadata `{ kind, size }`; return `false` to drop the batch. |
+
+`beforeSendBatch` runs after OTLP encoding, so it cannot mutate individual telemetry records.
+
+RegExp entries in `propagateTraceHeadersAllowList` are used as provided and can match any URL, so treat them as user-owned propagation policy.
 
 ## Public API
 
@@ -119,7 +122,7 @@ interface RumInstance {
 React Router:
 
 ```ts
-import { trackReactRouterNavigation } from 'rum-web-sdk/react-router';
+import { trackReactRouterNavigation } from '@rumtrace/web-sdk/react-router';
 
 trackReactRouterNavigation(rum, '/products/:id', { id: '123' });
 ```
@@ -127,7 +130,7 @@ trackReactRouterNavigation(rum, '/products/:id', { id: '123' });
 Next.js Pages Router:
 
 ```ts
-import { enableNextPagesRouter } from 'rum-web-sdk/next-pages-router';
+import { enableNextPagesRouter } from '@rumtrace/web-sdk/next-pages-router';
 
 const disable = await enableNextPagesRouter(rum);
 ```
@@ -135,7 +138,7 @@ const disable = await enableNextPagesRouter(rum);
 Next.js App Router:
 
 ```ts
-import { trackNextAppNavigation } from 'rum-web-sdk/next-app-router';
+import { trackNextAppNavigation } from '@rumtrace/web-sdk/next-app-router';
 
 trackNextAppNavigation(rum, {
   pathname: '/products/123',
@@ -160,7 +163,11 @@ Invalid initialization arguments return a no-op `RumInstance`, so host applicati
 - `authorization`
 - any key in `options.redact.urlQueryKeys`
 
+Route, resource, network, and router-adapter URL attributes use the same query redaction policy. Browser error messages are truncated to 1024 characters, and error stacks are truncated to 4096 characters.
+
 Sensitive input interaction text for `password`, `email`, `tel`, and `credit-card` input types is replaced with `[REDACTED]`.
+
+Interaction telemetry uses the SDK's custom click/submit instrumentation by default. Add `data-rum-ignore` to an element or ancestor to suppress interaction spans for that subtree.
 
 ## Build And Test
 

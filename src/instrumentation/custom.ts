@@ -5,6 +5,9 @@ import type { SessionManager } from '../core/session';
 import type { ErrorIsolator } from '../core/error-isolator';
 import { redactInteractionText, redactUrl } from '../core/redactor';
 
+const MAX_ERROR_MESSAGE_LENGTH = 1024;
+const MAX_ERROR_STACK_LENGTH = 4096;
+
 export interface CustomInstrumentationContext {
   tracer: any;
   logger: any;
@@ -32,8 +35,15 @@ function enableRouteChange(ctx: CustomInstrumentationContext): () => void {
 
   const record = (trigger: string, from: string, to: string) => {
     ctx.isolator.guard('route-change', () => {
-      const span = ctx.tracer.startSpan('routeChange', { attributes: { 'route.trigger': trigger, 'route.from': from, 'route.to': to } });
-      ctx.session.setRouteCurrent(to);
+      const redactedTo = redactUrl(to, ctx.options.redact?.urlQueryKeys);
+      const span = ctx.tracer.startSpan('routeChange', {
+        attributes: {
+          'route.trigger': trigger,
+          'route.from': redactUrl(from, ctx.options.redact?.urlQueryKeys),
+          'route.to': redactedTo
+        }
+      });
+      ctx.session.setRouteCurrent(redactedTo);
       requestAnimationFrameSafe(() => span.end());
     }, undefined);
   };
@@ -89,11 +99,11 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
     schedule({
       severityText: 'ERROR',
       severityNumber: 17,
-      body: event.message,
+      body: truncate(event.message, MAX_ERROR_MESSAGE_LENGTH),
       attributes: {
         'error.type': event.error?.name ?? 'Error',
-        'error.stack': event.error?.stack ?? '',
-        'source.file': event.filename ?? '',
+        'error.stack': truncate(event.error?.stack ?? '', MAX_ERROR_STACK_LENGTH),
+        'source.file': redactUrl(event.filename ?? '', ctx.options.redact?.urlQueryKeys),
         'source.line': event.lineno ?? 0,
         'source.column': event.colno ?? 0
       }
@@ -105,10 +115,10 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
     schedule({
       severityText: 'ERROR',
       severityNumber: 17,
-      body: reason instanceof Error ? reason.message : stringify(reason),
+      body: truncate(reason instanceof Error ? reason.message : stringify(reason), MAX_ERROR_MESSAGE_LENGTH),
       attributes: {
         'error.type': 'UnhandledPromiseRejection',
-        'error.stack': reason instanceof Error ? reason.stack ?? '' : ''
+        'error.stack': truncate(reason instanceof Error ? reason.stack ?? '' : '', MAX_ERROR_STACK_LENGTH)
       }
     });
   }, undefined);
@@ -221,4 +231,8 @@ function stringify(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
 }

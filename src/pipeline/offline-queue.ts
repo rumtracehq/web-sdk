@@ -49,12 +49,14 @@ export class OfflineQueue {
   }
 
   async drain(send: (batch: OfflineBatch) => Promise<void>, batchesPerSecond = 2): Promise<void> {
-    const delay = 1000 / batchesPerSecond;
+    const delay = batchesPerSecond > 0 ? 1000 / batchesPerSecond : 0;
     while (true) {
-      const batch = await this.shift();
+      const batch = await this.peek();
       if (!batch) return;
       await send(batch);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await this.remove(batch);
+      if (!(await this.peek())) return;
+      if (delay > 0) await sleep(delay);
     }
   }
 
@@ -65,16 +67,26 @@ export class OfflineQueue {
     return batches.reduce((sum, item) => sum + item.size, 0);
   }
 
-  private async shift(): Promise<StoredBatch | undefined> {
+  private async peek(): Promise<StoredBatch | undefined> {
     const db = await this.openDb();
-    if (!db) return this.memory.shift();
-    const tx = db.transaction('batches', 'readwrite');
+    if (!db) return this.memory[0];
+    const tx = db.transaction('batches', 'readonly');
     const store = tx.objectStore('batches');
     const cursor = await requestToPromise<IDBCursorWithValue | null>(store.openCursor());
     if (!cursor) return undefined;
     const batch = cursor.value as StoredBatch;
-    await requestToPromise(cursor.delete());
+    if (batch.id === undefined && typeof cursor.primaryKey === 'number') batch.id = cursor.primaryKey;
     return batch;
+  }
+
+  private async remove(batch: StoredBatch): Promise<void> {
+    const db = await this.openDb();
+    if (!db) {
+      if (this.memory[0] === batch) this.memory.shift();
+      return;
+    }
+    if (batch.id === undefined) return;
+    await requestToPromise(db.transaction('batches', 'readwrite').objectStore('batches').delete(batch.id));
   }
 
   private enqueueMemory(batch: StoredBatch): void {
@@ -121,4 +133,8 @@ function requestToPromise<T = unknown>(request: IDBRequest<T>): Promise<T> {
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
   });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

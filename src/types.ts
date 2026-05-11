@@ -27,12 +27,14 @@ export interface RumOptions {
   captureBodies?: boolean;
   redact?: {
     urlQueryKeys?: string[];
-    headerKeys?: string[];
   };
-  beforeSend?: (record: TelemetryRecord) => TelemetryRecord | null | undefined;
+  beforeSendBatch?: (metadata: TelemetryBatchMetadata) => boolean | void;
 }
 
-export type TelemetryRecord = Record<string, unknown>;
+export interface TelemetryBatchMetadata {
+  kind: 'traces' | 'logs' | 'metrics';
+  size: number;
+}
 
 export interface Counter {
   add(value: number, attributes?: Attributes): void;

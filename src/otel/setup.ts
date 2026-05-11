@@ -40,7 +40,7 @@ export function setupOpenTelemetry(
     collectorUrl: options.collectorUrl,
     authToken: token,
     headers: options.headers,
-    beforeSend: options.beforeSend,
+    beforeSendBatch: options.beforeSendBatch,
     isolator
   });
   const traceExporter = new RumSpanExporter(httpExporter);

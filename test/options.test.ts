@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { ErrorIsolator } from '../src/core/error-isolator';
 import { ALL_INSTRUMENTATIONS, normalizeOptions } from '../src/core/options';
+import type { RumOptions } from '../src/types';
 
 describe('normalizeOptions', () => {
   test('defaults to all core browser instrumentations', () => {
@@ -47,5 +48,17 @@ describe('normalizeOptions', () => {
 
     expect(options?.headers.authorization).toBe('Basic abc');
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  test('beforeSendBatch exposes batch metadata and boolean drop semantics', () => {
+    const input: RumOptions = {
+      collectorUrl: 'https://collector.example/otlp',
+      beforeSendBatch: (metadata) => metadata.kind === 'traces' && metadata.size > 0
+    };
+
+    const options = normalizeOptions(input, new ErrorIsolator());
+
+    expect(options?.beforeSendBatch?.({ kind: 'traces', size: 1 })).toBe(true);
+    expect(options?.beforeSendBatch?.({ kind: 'logs', size: 1 })).toBe(false);
   });
 });

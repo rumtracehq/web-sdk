@@ -1,19 +1,20 @@
 import type { RumInstance } from './types';
+import { redactUrl } from './core/redactor';
 
 export async function enableNextPagesRouter(rum: RumInstance): Promise<() => void> {
   const mod = await import('next/router');
   const router = mod.default;
   let active: ReturnType<RumInstance['startSpan']> | undefined;
   const onStart = (url: string) => {
-    active = rum.startSpan('routeChange', { 'next.router': 'pages', 'route.url': url });
+    active = rum.startSpan('routeChange', { 'next.router': 'pages', 'route.url': redactUrl(url) });
   };
   const onComplete = (url: string) => {
-    active?.setAttribute('route.url', url);
+    active?.setAttribute('route.url', redactUrl(url));
     active?.end();
     active = undefined;
   };
   const onError = (err: Error, url: string) => {
-    active?.setAttribute('route.url', url);
+    active?.setAttribute('route.url', redactUrl(url));
     active?.setStatus('ERROR', err.message);
     active?.end();
     active = undefined;

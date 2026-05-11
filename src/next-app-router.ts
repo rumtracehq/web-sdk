@@ -1,4 +1,5 @@
 import type { RumInstance } from './types';
+import { redactUrl } from './core/redactor';
 
 export interface RumNextAppTrackerProps {
   rum: RumInstance;
@@ -8,7 +9,7 @@ export interface RumNextAppTrackerProps {
 }
 
 export function trackNextAppNavigation(rum: RumInstance, props: Omit<RumNextAppTrackerProps, 'rum'>): void {
-  const url = props.search ? `${props.pathname}?${props.search}` : props.pathname;
+  const url = redactUrl(props.search ? `${props.pathname}?${props.search}` : props.pathname);
   const span = rum.startSpan('routeChange', {
     'next.router': 'app',
     'route.url': url,

@@ -11,7 +11,7 @@ import { enableCustomInstrumentations } from './instrumentation/custom';
 import { enableFetchTracePropagation } from './instrumentation/fetch-propagation';
 import { OpenTelemetryRumInstance } from './instance';
 
-export type { AttributeValue, Attributes, Counter, Gauge, Histogram, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle } from './types';
+export type { AttributeValue, Attributes, Counter, Gauge, Histogram, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle, TelemetryBatchMetadata } from './types';
 export { redactHeaders, redactInteractionText, redactUrl } from './core/redactor';
 
 declare global {

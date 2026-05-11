@@ -14,7 +14,7 @@ export interface HttpTelemetryExporterOptions {
   collectorUrl: string;
   authToken: string;
   headers: Record<string, string>;
-  beforeSend?: NormalizedOptions['beforeSend'];
+  beforeSendBatch?: NormalizedOptions['beforeSendBatch'];
   fetchImpl?: typeof fetch;
   beacon?: Navigator['sendBeacon'];
   offlineQueue?: OfflineQueue;
@@ -29,6 +29,11 @@ export class HttpTelemetryExporter {
   private readonly offlineQueue: OfflineQueue;
   private readonly retryController: RetryController;
   private readonly isolator: ErrorIsolator;
+  private readonly removeOnlineListener: (() => void) | undefined;
+  private drainingOffline = false;
+  private offlineDrainPromise: Promise<void> | undefined;
+  private shutdownPromise: Promise<void> | undefined;
+  private isShutdown = false;
 
   constructor(private readonly options: HttpTelemetryExporterOptions) {
     this.collectorUrl = options.collectorUrl.replace(/\/+$/, '');
@@ -37,16 +42,18 @@ export class HttpTelemetryExporter {
     this.offlineQueue = options.offlineQueue ?? new OfflineQueue();
     this.isolator = options.isolator ?? new ErrorIsolator();
     this.retryController = options.retryController ?? new RetryController(this.isolator);
+    this.removeOnlineListener = this.listenForOnlineReplay();
+    if (typeof navigator !== 'undefined' && navigator.onLine !== false) void this.drainOffline();
   }
 
   async exportBytes(kind: TelemetryKind, body: Uint8Array, unload = false): Promise<void> {
     if (body.byteLength === 0) return;
-    if (this.options.beforeSend) {
+    if (this.options.beforeSendBatch) {
       try {
-        const decision = this.options.beforeSend({ kind, size: body.byteLength });
-        if (decision == null) return;
+        const decision = this.options.beforeSendBatch({ kind, size: body.byteLength });
+        if (decision === false) return;
       } catch (err) {
-        this.isolator.warn('before-send', err);
+        this.isolator.warn('before-send-batch', err);
       }
     }
     const path = `/v1/${kind}`;
@@ -73,14 +80,45 @@ export class HttpTelemetryExporter {
     }
   }
 
-  async drainOffline(): Promise<void> {
-    await this.offlineQueue.drain(async (batch) => {
-      await this.fetchImpl(`${this.collectorUrl}${batch.path}`, {
-        method: 'POST',
-        headers: { ...batch.headers, 'x-rum-skip': '1' },
-        body: batch.body
+  drainOffline(): Promise<void> {
+    if (this.isShutdown) return Promise.resolve();
+    if (this.drainingOffline && this.offlineDrainPromise) return this.offlineDrainPromise;
+
+    this.drainingOffline = true;
+    this.offlineDrainPromise = this.isolator.guardAsync('offline-drain', async () => {
+      await this.offlineQueue.drain(async (batch) => {
+        const response = await this.fetchImpl(`${this.collectorUrl}${batch.path}`, {
+          method: 'POST',
+          headers: { ...batch.headers, 'x-rum-skip': '1' },
+          body: batch.body
+        });
+        if (response.status < 200 || response.status >= 300) throw new Error(`Collector returned ${response.status}`);
       });
+    }, undefined).finally(() => {
+      this.drainingOffline = false;
+      this.offlineDrainPromise = undefined;
     });
+    return this.offlineDrainPromise;
+  }
+
+  shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    this.shutdownPromise = Promise.resolve().then(() => {
+      this.isShutdown = true;
+      this.removeOnlineListener?.();
+    });
+    return this.shutdownPromise;
+  }
+
+  private listenForOnlineReplay(): (() => void) | undefined {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || typeof window.removeEventListener !== 'function') {
+      return undefined;
+    }
+    const onOnline = () => {
+      void this.drainOffline();
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
   }
 
   private canBeacon(body: Uint8Array, headers: Record<string, string>): boolean {
@@ -102,7 +140,7 @@ export class RumSpanExporter implements SpanExporter {
   }
 
   shutdown(): Promise<void> {
-    return Promise.resolve();
+    return this.http.shutdown();
   }
 }
 
@@ -117,7 +155,7 @@ export class RumLogExporter implements LogRecordExporter {
   }
 
   shutdown(): Promise<void> {
-    return Promise.resolve();
+    return this.http.shutdown();
   }
 
   forceFlush(): Promise<void> {
@@ -144,7 +182,7 @@ export class RumMetricExporter implements PushMetricExporter {
   }
 
   shutdown(): Promise<void> {
-    return Promise.resolve();
+    return this.http.shutdown();
   }
 }
 

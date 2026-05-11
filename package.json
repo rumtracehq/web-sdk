@@ -1,5 +1,5 @@
 {
-  "name": "rum-web-sdk",
+  "name": "@rumtrace/web-sdk",
   "version": "0.1.0",
   "description": "Browser RUM SDK built on OpenTelemetry JS.",
   "type": "module",
@@ -32,6 +32,10 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsup src/index.ts src/react-router.ts src/next-pages-router.ts src/next-app-router.ts --format esm,cjs --dts --sourcemap --clean",
     "test": "vitest run",
