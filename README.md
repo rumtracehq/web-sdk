@@ -7,8 +7,7 @@ The SDK exposes one primary entry point:
 ```ts
 import rumtrace from '@rumtrace/web-sdk';
 
-const rum = rumtrace.start('my web app', 'collector-token', {
-  collectorUrl: 'https://collector.example.com/otlp',
+const rum = rumtrace.start('my web app', 'public-collector-token', {
   environment: 'production',
   release: '1.2.3'
 });
@@ -50,8 +49,7 @@ SDK-owned code focuses on the RUM facade, session/user attributes, error isolati
 ```ts
 import { start } from '@rumtrace/web-sdk';
 
-const rum = start('checkout-web', 'theirToken', {
-  collectorUrl: 'https://collector.example.com/otlp',
+const rum = start('checkout-web', 'public-collector-token', {
   headers: {
     'x-org-id': 'org_123'
   },

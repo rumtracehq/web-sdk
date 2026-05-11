@@ -80,7 +80,6 @@
     "fake-indexeddb": "6.2.5",
     "fast-check": "4.7.0",
     "happy-dom": "20.9.0",
-    "protobufjs": "8.2.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router": "7.15.0",
