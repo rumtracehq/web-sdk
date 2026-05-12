@@ -1,7 +1,7 @@
 import type { InstrumentationName, RumOptions } from '../types';
 import { ErrorIsolator } from './error-isolator';
 
-export const DEFAULT_COLLECTOR_URL = 'https://rum-ingest.example.com/otlp';
+export const DEFAULT_COLLECTOR_URL = 'https://ingest.rumtrace.com/';
 
 export const ALL_INSTRUMENTATIONS: InstrumentationName[] = [
   'page-load',

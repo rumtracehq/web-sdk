@@ -8,6 +8,7 @@ The SDK exposes one primary entry point:
 import rumtrace from '@rumtrace/web-sdk';
 
 const rum = rumtrace.start('my web app', 'public-collector-token', {
+  collectorUrl: 'https://ingest.rumtrace.com/',
   environment: 'production',
   release: '1.2.3'
 });
@@ -50,6 +51,7 @@ SDK-owned code focuses on the RUM facade, session/user attributes, error isolati
 import { start } from '@rumtrace/web-sdk';
 
 const rum = start('checkout-web', 'public-collector-token', {
+  collectorUrl: 'https://ingest.rumtrace.com/',
   headers: {
     'x-org-id': 'org_123'
   },
@@ -80,7 +82,7 @@ rum.histogram('checkout.duration').record(842);
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `collectorUrl` | `https://rum-ingest.example.com/otlp` | HTTPS OTLP base URL. Non-HTTPS URLs return a no-op instance. |
+| `collectorUrl` | `https://ingest.rumtrace.com/` | HTTPS OTLP base URL. Non-HTTPS URLs return a no-op instance. |
 | `headers` | `{}` | Extra exporter headers. A provided `Authorization` header overrides the bearer token. |
 | `sampleRate` | `1` | Session sampling rate from `0` to `1`. Invalid values fall back to `1`. |
 | `environment` | `undefined` | Resource attribute `deployment.environment`. |
@@ -130,7 +132,9 @@ Next.js Pages Router:
 ```ts
 import { enableNextPagesRouter } from '@rumtrace/web-sdk/next-pages-router';
 
-const disable = await enableNextPagesRouter(rum);
+const disable = await enableNextPagesRouter(rum, {
+  redact: { urlQueryKeys: ['session_id'] }
+});
 ```
 
 Next.js App Router:
@@ -140,7 +144,8 @@ import { trackNextAppNavigation } from '@rumtrace/web-sdk/next-app-router';
 
 trackNextAppNavigation(rum, {
   pathname: '/products/123',
-  pattern: '/products/[id]'
+  pattern: '/products/[id]',
+  redact: { urlQueryKeys: ['session_id'] }
 });
 ```
 
@@ -162,6 +167,8 @@ Invalid initialization arguments return a no-op `RumInstance`, so host applicati
 - any key in `options.redact.urlQueryKeys`
 
 Route, resource, network, and router-adapter URL attributes use the same query redaction policy. Browser error messages are truncated to 1024 characters, and error stacks are truncated to 4096 characters.
+
+Pass the same `redact` object to the optional Next.js router adapters when you use custom query keys there.
 
 Sensitive input interaction text for `password`, `email`, `tel`, and `credit-card` input types is replaced with `[REDACTED]`.
 

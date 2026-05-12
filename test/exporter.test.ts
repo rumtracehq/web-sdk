@@ -102,6 +102,25 @@ describe('HttpTelemetryExporter', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  test('uses keepalive fetch during unload when auth headers prevent beacon', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const beacon = vi.fn(() => true);
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      fetchImpl,
+      beacon
+    });
+
+    await exporter.withUnloadDelivery(() => exporter.exportBytes('traces', new Uint8Array([1])));
+
+    expect(beacon).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ keepalive: true });
+    expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer token' });
+  });
+
   test('drains queued telemetry when the browser returns online', async () => {
     vi.stubGlobal('indexedDB', undefined);
     setOnline(false);
@@ -198,6 +217,32 @@ describe('HttpTelemetryExporter', () => {
     await Promise.all([firstDrain, secondDrain]);
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(await offlineQueue.sizeBytes()).toBe(0);
+    await exporter.shutdown();
+  });
+
+  test('offline replay drops poison client errors and continues draining', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    setOnline(false);
+    let replayAttempt = 0;
+    const fetchImpl = vi.fn(async () => new Response(null, { status: (replayAttempt += 1) === 1 ? 400 : 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const offlineQueue = new OfflineQueue({ memoryCapBytes: 1024 });
+    await offlineQueue.enqueue({ path: '/v1/traces', contentType: 'application/x-protobuf', body: new Uint8Array([1]).buffer, headers: {} });
+    await offlineQueue.enqueue({ path: '/v1/logs', contentType: 'application/x-protobuf', body: new Uint8Array([2]).buffer, headers: {} });
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      fetchImpl,
+      offlineQueue,
+      retryController: new RetryController(new ErrorIsolator(), { sleep: async () => undefined })
+    });
+
+    await exporter.drainOffline();
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://collector.example/otlp/v1/traces');
+    expect(fetchImpl.mock.calls[1][0]).toBe('https://collector.example/otlp/v1/logs');
     expect(await offlineQueue.sizeBytes()).toBe(0);
     await exporter.shutdown();
   });

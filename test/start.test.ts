@@ -49,4 +49,15 @@ describe('start validation', () => {
     expect(window.__rumWebSdkInstance).toBe(first);
     expect(warn).toHaveBeenCalledTimes(1);
   });
+
+  test('shutdown clears the active instance so start can run again', async () => {
+    const { start } = await import('../src/index');
+
+    const first = start('app', 'token', { collectorUrl: 'https://collector.example/otlp', sampleRate: 0 });
+    await first.shutdown();
+    const second = start('app', 'token', { collectorUrl: 'https://collector.example/otlp', sampleRate: 0 });
+
+    expect(second).not.toBe(first);
+    expect(window.__rumWebSdkInstance).toBe(second);
+  });
 });

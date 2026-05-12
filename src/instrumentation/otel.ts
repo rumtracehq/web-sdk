@@ -1,4 +1,4 @@
-import type { Span } from '@opentelemetry/api';
+import type { MeterProvider, Span, TracerProvider } from '@opentelemetry/api';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { DocumentLoadInstrumentation } from '@opentelemetry/instrumentation-document-load';
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
@@ -8,7 +8,10 @@ import type { NormalizedOptions } from '../core/options';
 import { redactUrl } from '../core/redactor';
 import { normalizeTraceHeaderAllowList, traceHeaderUrlPattern } from './fetch-propagation';
 
-export function registerOtelInstrumentations(options: NormalizedOptions): Array<{ disable(): void }> {
+export function registerOtelInstrumentations(
+  options: NormalizedOptions,
+  providers: { tracerProvider?: TracerProvider; meterProvider?: MeterProvider } = {}
+): Array<{ disable(): void }> {
   const enabled = new Set<InstrumentationName>(options.enabledInstrumentations);
   const instrumentations: Array<{ disable(): void }> = [];
   const collectorUrlPattern = traceHeaderUrlPattern(options.collectorUrl);
@@ -35,7 +38,7 @@ export function registerOtelInstrumentations(options: NormalizedOptions): Array<
       })
     );
   }
-  registerInstrumentations({ instrumentations: instrumentations as never });
+  registerInstrumentations({ instrumentations: instrumentations as never, ...providers });
   return instrumentations;
 }
 

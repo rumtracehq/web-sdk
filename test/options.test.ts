@@ -4,6 +4,12 @@ import { ALL_INSTRUMENTATIONS, normalizeOptions } from '../src/core/options';
 import type { RumOptions } from '../src/types';
 
 describe('normalizeOptions', () => {
+  test('defaults to the RumTrace ingest collector', () => {
+    const options = normalizeOptions(undefined, new ErrorIsolator());
+
+    expect(options?.collectorUrl).toBe('https://ingest.rumtrace.com');
+  });
+
   test('defaults to all core browser instrumentations', () => {
     const options = normalizeOptions({ collectorUrl: 'https://collector.example/otlp/' }, new ErrorIsolator());
 

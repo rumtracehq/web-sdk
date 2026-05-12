@@ -161,12 +161,34 @@ function enableInteractions(ctx: CustomInstrumentationContext): () => void {
 }
 
 function enableWebVitals(ctx: CustomInstrumentationContext): () => void {
+  let disposed = false;
   const disposers: Array<() => void> = [];
+  const gauges = new Map<string, { value: number; callback: (result: any) => void; remove: () => void }>();
+
+  const observe = (name: string, value: number, unit: string) => {
+    ctx.isolator.guard('web-vitals-observe', () => {
+      if (disposed) return;
+      let state = gauges.get(name);
+      if (!state) {
+        const gauge = ctx.meter.createObservableGauge(name, { unit });
+        const callback = (result: any) => {
+          if (!disposed) result.observe(state?.value ?? value);
+        };
+        state = {
+          value,
+          callback,
+          remove: () => gauge.removeCallback?.(callback)
+        };
+        gauges.set(name, state);
+        gauge.addCallback(callback);
+        disposers.push(state.remove);
+      }
+      state.value = value;
+    }, undefined);
+  };
+
   import('web-vitals').then((vitals) => {
-    const observe = (name: string, value: number, unit: string) => {
-      const gauge = ctx.meter.createObservableGauge(name, { unit });
-      gauge.addCallback((result: any) => result.observe(value));
-    };
+    if (disposed) return;
     vitals.onLCP?.((metric) => observe('webvital.lcp', metric.value, 'ms'));
     vitals.onCLS?.((metric) => observe('webvital.cls', metric.value, '1'));
     vitals.onINP?.((metric) => observe('webvital.inp', metric.value, 'ms'));
@@ -174,7 +196,9 @@ function enableWebVitals(ctx: CustomInstrumentationContext): () => void {
     vitals.onTTFB?.((metric) => observe('webvital.ttfb', metric.value, 'ms'));
   }).catch(() => undefined);
   return () => {
-    for (const dispose of disposers) dispose();
+    disposed = true;
+    for (const dispose of disposers.splice(0)) dispose();
+    gauges.clear();
   };
 }
 

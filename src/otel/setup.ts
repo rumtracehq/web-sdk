@@ -18,6 +18,7 @@ export interface OTelRuntime {
   tracer: ReturnType<typeof trace.getTracer>;
   logger: ReturnType<LoggerProvider['getLogger']>;
   meter: ReturnType<MeterProvider['getMeter']>;
+  cleanup: Array<() => void>;
 }
 
 export function setupOpenTelemetry(
@@ -64,13 +65,41 @@ export function setupOpenTelemetry(
   const metricReader = new PeriodicExportingMetricReader({ exporter: metricExporter, exportIntervalMillis: 5000 });
   const meterProvider = new MeterProvider({ resource, readers: [metricReader] });
   metrics.setGlobalMeterProvider(meterProvider);
+  const cleanup = [enablePageExitFlush(httpExporter, async () => {
+    await Promise.all([
+      tracerProvider.forceFlush(),
+      loggerProvider.forceFlush(),
+      meterProvider.forceFlush()
+    ]);
+  }, isolator)];
 
   return {
     tracerProvider,
     loggerProvider,
     meterProvider,
-    tracer: trace.getTracer('rum-web-sdk', SDK_VERSION),
+    tracer: tracerProvider.getTracer('rum-web-sdk', SDK_VERSION),
     logger: loggerProvider.getLogger('rum-web-sdk', SDK_VERSION),
-    meter: meterProvider.getMeter('rum-web-sdk', SDK_VERSION)
+    meter: meterProvider.getMeter('rum-web-sdk', SDK_VERSION),
+    cleanup
+  };
+}
+
+function enablePageExitFlush(httpExporter: HttpTelemetryExporter, forceFlush: () => Promise<void>, isolator: ErrorIsolator): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  let pending: Promise<unknown> | undefined;
+  const flush = () => {
+    if (pending) return;
+    pending = httpExporter.withUnloadDelivery(() => isolator.guardAsync('page-exit-flush', forceFlush, undefined)).finally(() => {
+      pending = undefined;
+    });
+  };
+  const onVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') flush();
+  };
+  window.addEventListener('pagehide', flush, true);
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange, true);
+  return () => {
+    window.removeEventListener('pagehide', flush, true);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange, true);
   };
 }

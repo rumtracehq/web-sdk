@@ -44,8 +44,18 @@ export class OfflineQueue {
       this.enqueueMemory(stored);
       return;
     }
-    await requestToPromise(db.transaction('batches', 'readwrite').objectStore('batches').add(stored));
-    await this.evictIdb(db);
+    try {
+      await requestToPromise(db.transaction('batches', 'readwrite').objectStore('batches').add(stored));
+    } catch {
+      this.disableIdb(db);
+      this.enqueueMemory(stored);
+      return;
+    }
+    try {
+      await this.evictIdb(db);
+    } catch {
+      this.disableIdb(db);
+    }
   }
 
   async drain(send: (batch: OfflineBatch) => Promise<void>, batchesPerSecond = 2): Promise<void> {
@@ -63,20 +73,30 @@ export class OfflineQueue {
   async sizeBytes(): Promise<number> {
     const db = await this.openDb();
     if (!db) return this.memory.reduce((sum, item) => sum + item.size, 0);
-    const batches = await this.getAll(db);
-    return batches.reduce((sum, item) => sum + item.size, 0);
+    try {
+      const batches = await this.getAll(db);
+      return batches.reduce((sum, item) => sum + item.size, 0);
+    } catch {
+      this.disableIdb(db);
+      return this.memory.reduce((sum, item) => sum + item.size, 0);
+    }
   }
 
   private async peek(): Promise<StoredBatch | undefined> {
     const db = await this.openDb();
     if (!db) return this.memory[0];
-    const tx = db.transaction('batches', 'readonly');
-    const store = tx.objectStore('batches');
-    const cursor = await requestToPromise<IDBCursorWithValue | null>(store.openCursor());
-    if (!cursor) return undefined;
-    const batch = cursor.value as StoredBatch;
-    if (batch.id === undefined && typeof cursor.primaryKey === 'number') batch.id = cursor.primaryKey;
-    return batch;
+    try {
+      const tx = db.transaction('batches', 'readonly');
+      const store = tx.objectStore('batches');
+      const cursor = await requestToPromise<IDBCursorWithValue | null>(store.openCursor());
+      if (!cursor) return undefined;
+      const batch = cursor.value as StoredBatch;
+      if (batch.id === undefined && typeof cursor.primaryKey === 'number') batch.id = cursor.primaryKey;
+      return batch;
+    } catch {
+      this.disableIdb(db);
+      return this.memory[0];
+    }
   }
 
   private async remove(batch: StoredBatch): Promise<void> {
@@ -86,7 +106,11 @@ export class OfflineQueue {
       return;
     }
     if (batch.id === undefined) return;
-    await requestToPromise(db.transaction('batches', 'readwrite').objectStore('batches').delete(batch.id));
+    try {
+      await requestToPromise(db.transaction('batches', 'readwrite').objectStore('batches').delete(batch.id));
+    } catch {
+      this.disableIdb(db);
+    }
   }
 
   private enqueueMemory(batch: StoredBatch): void {
@@ -125,6 +149,15 @@ export class OfflineQueue {
       request.onsuccess = () => resolve(request.result);
     });
     return this.dbPromise;
+  }
+
+  private disableIdb(db: IDBDatabase): void {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures; future queue operations will use memory storage.
+    }
+    this.dbPromise = Promise.resolve(undefined);
   }
 }
 

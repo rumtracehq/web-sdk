@@ -84,4 +84,33 @@ describe('OfflineQueue', () => {
     expect(sent).toEqual([1, 2]);
     expect(await queue.sizeBytes()).toBe(0);
   });
+
+  test('falls back to memory when IndexedDB transactions fail after open', async () => {
+    const db = {
+      close: vi.fn(),
+      transaction: vi.fn(() => {
+        throw new Error('quota exceeded');
+      })
+    };
+    const request: Partial<IDBOpenDBRequest> = { result: db as unknown as IDBDatabase };
+    vi.stubGlobal('indexedDB', {
+      open: vi.fn(() => {
+        queueMicrotask(() => request.onsuccess?.call(request as IDBOpenDBRequest, new Event('success')));
+        return request;
+      })
+    });
+    const queue = new OfflineQueue({ memoryCapBytes: 1024 });
+
+    await queue.enqueue({ path: '/v1/traces', contentType: 'application/x-protobuf', body: new Uint8Array([1]).buffer, headers: {} });
+
+    expect(db.close).toHaveBeenCalledTimes(1);
+    expect(await queue.sizeBytes()).toBe(1);
+    const sent: number[] = [];
+    await queue.drain(async (batch) => {
+      sent.push(new Uint8Array(batch.body)[0]);
+    }, 1000);
+
+    expect(sent).toEqual([1]);
+    expect(await queue.sizeBytes()).toBe(0);
+  });
 });

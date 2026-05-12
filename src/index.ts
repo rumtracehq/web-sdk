@@ -54,9 +54,13 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       () => attributes.current(),
       isolator
     );
-    const otelInstrumentations = registerOtelInstrumentations(normalized);
+    const otelInstrumentations = registerOtelInstrumentations(normalized, {
+      tracerProvider: runtime.tracerProvider,
+      meterProvider: runtime.meterProvider
+    });
     const instance = new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, []);
     const cleanup = [
+      ...runtime.cleanup,
       enableFetchTracePropagation(normalized, () => instance.getActiveSpanContext()),
       ...otelInstrumentations.map((instrumentation) => () => instrumentation.disable()),
       ...enableCustomInstrumentations({
@@ -78,9 +82,20 @@ function getActiveInstance(): RumInstance | undefined {
 }
 
 function setActiveInstance(instance: RumInstance): RumInstance {
+  let shutdownPromise: Promise<void> | undefined;
+  const originalShutdown = instance.shutdown.bind(instance);
+  instance.shutdown = () => {
+    shutdownPromise ??= originalShutdown().finally(() => clearActiveInstance(instance));
+    return shutdownPromise;
+  };
   activeInstance = instance;
   if (typeof window !== 'undefined') window.__rumWebSdkInstance = instance;
   return instance;
+}
+
+function clearActiveInstance(instance: RumInstance): void {
+  if (activeInstance === instance) activeInstance = undefined;
+  if (typeof window !== 'undefined' && window.__rumWebSdkInstance === instance) delete window.__rumWebSdkInstance;
 }
 
 export const rumtrace = { start };

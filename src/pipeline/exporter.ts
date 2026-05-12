@@ -34,6 +34,7 @@ export class HttpTelemetryExporter {
   private offlineDrainPromise: Promise<void> | undefined;
   private shutdownPromise: Promise<void> | undefined;
   private isShutdown = false;
+  private unloadDeliveryDepth = 0;
 
   constructor(private readonly options: HttpTelemetryExporterOptions) {
     this.collectorUrl = options.collectorUrl.replace(/\/+$/, '');
@@ -48,6 +49,7 @@ export class HttpTelemetryExporter {
 
   async exportBytes(kind: TelemetryKind, body: Uint8Array, unload = false): Promise<void> {
     if (body.byteLength === 0) return;
+    const unloading = unload || this.unloadDeliveryDepth > 0;
     if (this.options.beforeSendBatch) {
       try {
         const decision = this.options.beforeSendBatch({ kind, size: body.byteLength });
@@ -64,20 +66,32 @@ export class HttpTelemetryExporter {
       await this.offlineQueue.enqueue(batch);
       return;
     }
-    if (unload && this.canBeacon(body, headers)) {
+    // Authenticated exports need fetch keepalive because sendBeacon cannot attach custom headers.
+    if (unloading && this.canBeacon(body, headers)) {
       const ok = (this.options.beacon ?? navigator.sendBeacon.bind(navigator))(`${this.collectorUrl}${path}`, new Blob([bodyBuffer], { type: 'application/x-protobuf' }));
       if (ok) return;
     }
     try {
-      await this.retryController.run(() => this.fetchImpl(`${this.collectorUrl}${path}`, {
+      const request = () => this.fetchImpl(`${this.collectorUrl}${path}`, {
         method: 'POST',
         headers: { ...headers, 'x-rum-skip': '1' },
         body: bodyBuffer,
-        keepalive: unload
-      }));
+        keepalive: unloading
+      });
+      const response = unloading ? await request() : await this.retryController.run(request);
+      if (response && (response.status === 429 || response.status >= 500)) {
+        await this.offlineQueue.enqueue(batch);
+      }
     } catch {
       await this.offlineQueue.enqueue(batch);
     }
+  }
+
+  withUnloadDelivery<T>(work: () => Promise<T>): Promise<T> {
+    this.unloadDeliveryDepth += 1;
+    return Promise.resolve().then(work).finally(() => {
+      this.unloadDeliveryDepth = Math.max(0, this.unloadDeliveryDepth - 1);
+    });
   }
 
   drainOffline(): Promise<void> {
@@ -87,12 +101,11 @@ export class HttpTelemetryExporter {
     this.drainingOffline = true;
     this.offlineDrainPromise = this.isolator.guardAsync('offline-drain', async () => {
       await this.offlineQueue.drain(async (batch) => {
-        const response = await this.fetchImpl(`${this.collectorUrl}${batch.path}`, {
+        await this.retryController.run(() => this.fetchImpl(`${this.collectorUrl}${batch.path}`, {
           method: 'POST',
           headers: { ...batch.headers, 'x-rum-skip': '1' },
           body: batch.body
-        });
-        if (response.status < 200 || response.status >= 300) throw new Error(`Collector returned ${response.status}`);
+        }));
       });
     }, undefined).finally(() => {
       this.drainingOffline = false;
