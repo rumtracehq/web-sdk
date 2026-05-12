@@ -175,6 +175,10 @@ npm run build
 npm test
 ```
 
+## Releases
+
+Releases are managed with Changesets. See [RELEASING.md](./RELEASING.md) for the contributor and npm publishing flow.
+
 The test suite uses Vitest, Happy DOM, and fast-check. Property tests use the design tag format:
 
 ```ts
