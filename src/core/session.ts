@@ -84,9 +84,12 @@ function safeSessionStorage(): Storage | undefined {
 }
 
 function uuidV4(): string {
+  const webCrypto = typeof globalThis.crypto === 'undefined' ? undefined : globalThis.crypto;
+  if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID();
+
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
+  if (webCrypto?.getRandomValues) {
+    webCrypto.getRandomValues(bytes);
   } else {
     for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   }
