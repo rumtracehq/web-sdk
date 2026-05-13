@@ -25,6 +25,7 @@ export interface RumOptions {
   propagateTraceHeaders?: boolean;
   propagateTraceHeadersAllowList?: Array<string | RegExp>;
   captureBodies?: boolean;
+  payloadCompression?: 'gzip' | 'none';
   redact?: {
     urlQueryKeys?: string[];
   };

@@ -21,6 +21,7 @@ export interface NormalizedOptions extends RumOptions {
   propagateTraceHeaders: boolean;
   propagateTraceHeadersAllowList: Array<string | RegExp>;
   captureBodies: boolean;
+  payloadCompression: 'gzip' | 'none';
 }
 
 export function normalizeOptions(options: RumOptions | undefined, isolator: ErrorIsolator): NormalizedOptions | undefined {
@@ -50,7 +51,8 @@ export function normalizeOptions(options: RumOptions | undefined, isolator: Erro
     enabledInstrumentations,
     propagateTraceHeaders: options?.propagateTraceHeaders ?? false,
     propagateTraceHeadersAllowList: options?.propagateTraceHeadersAllowList ?? [],
-    captureBodies: options?.captureBodies ?? false
+    captureBodies: options?.captureBodies ?? false,
+    payloadCompression: options?.payloadCompression ?? 'gzip'
   };
 }
 

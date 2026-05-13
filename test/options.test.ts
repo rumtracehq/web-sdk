@@ -18,6 +18,7 @@ describe('normalizeOptions', () => {
     expect(options?.enabledInstrumentations).toEqual(ALL_INSTRUMENTATIONS);
     expect(options?.propagateTraceHeaders).toBe(false);
     expect(options?.captureBodies).toBe(false);
+    expect(options?.payloadCompression).toBe('gzip');
   });
 
   test('rejects non-https collector URLs with one console error', () => {

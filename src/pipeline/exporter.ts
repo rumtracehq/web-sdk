@@ -13,6 +13,7 @@ export interface HttpTelemetryExporterOptions {
   collectorUrl: string;
   authToken: string;
   headers: Record<string, string>;
+  payloadCompression?: NormalizedOptions['payloadCompression'];
   beforeSendBatch?: NormalizedOptions['beforeSendBatch'];
   fetchImpl?: typeof fetch;
   beacon?: Navigator['sendBeacon'];
@@ -58,8 +59,13 @@ export class HttpTelemetryExporter {
       }
     }
     const path = `/v1/${kind}`;
-    const headers = { 'Content-Type': 'application/x-protobuf', ...this.headers };
-    const bodyBuffer = toArrayBuffer(body);
+    const compressed = await compressBody(body, this.options.payloadCompression ?? 'gzip');
+    const headers = {
+      'Content-Type': 'application/x-protobuf',
+      ...(compressed.encoding ? { 'Content-Encoding': compressed.encoding } : {}),
+      ...this.headers
+    };
+    const bodyBuffer = toArrayBuffer(compressed.body);
     const batch = { path, contentType: headers['Content-Type'], body: bodyBuffer, headers };
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       await this.offlineQueue.enqueue(batch);
@@ -187,4 +193,14 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const out = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(out).set(bytes);
   return out;
+}
+
+async function compressBody(body: Uint8Array, mode: 'gzip' | 'none'): Promise<{ body: Uint8Array; encoding?: 'gzip' }> {
+  if (mode === 'none' || typeof CompressionStream === 'undefined') return { body };
+  try {
+    const stream = new Blob([toArrayBuffer(body)]).stream().pipeThrough(new CompressionStream('gzip'));
+    return { body: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: 'gzip' };
+  } catch {
+    return { body };
+  }
 }

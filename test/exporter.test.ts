@@ -51,6 +51,58 @@ describe('HttpTelemetryExporter', () => {
     expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Basic abc' });
   });
 
+  test('gzip-compresses protobuf bytes when CompressionStream is available', async () => {
+    vi.stubGlobal('CompressionStream', FakeCompressionStream);
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      fetchImpl,
+      retryController: new RetryController(new ErrorIsolator(), { sleep: async () => undefined })
+    });
+
+    await exporter.exportBytes('logs', new Uint8Array([1, 2, 3]));
+
+    expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ 'Content-Encoding': 'gzip' });
+    expect(Array.from(new Uint8Array(fetchImpl.mock.calls[0][1]?.body as ArrayBuffer))).toEqual([9, 1, 2, 3]);
+  });
+
+  test('sends original protobuf bytes when compression is disabled', async () => {
+    vi.stubGlobal('CompressionStream', FakeCompressionStream);
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      payloadCompression: 'none',
+      fetchImpl,
+      retryController: new RetryController(new ErrorIsolator(), { sleep: async () => undefined })
+    });
+
+    await exporter.exportBytes('logs', new Uint8Array([1, 2, 3]));
+
+    expect(fetchImpl.mock.calls[0][1]?.headers).not.toHaveProperty('Content-Encoding');
+    expect(Array.from(new Uint8Array(fetchImpl.mock.calls[0][1]?.body as ArrayBuffer))).toEqual([1, 2, 3]);
+  });
+
+  test('falls back to original protobuf bytes when CompressionStream is unavailable', async () => {
+    vi.stubGlobal('CompressionStream', undefined);
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      fetchImpl,
+      retryController: new RetryController(new ErrorIsolator(), { sleep: async () => undefined })
+    });
+
+    await exporter.exportBytes('logs', new Uint8Array([1, 2, 3]));
+
+    expect(fetchImpl.mock.calls[0][1]?.headers).not.toHaveProperty('Content-Encoding');
+    expect(Array.from(new Uint8Array(fetchImpl.mock.calls[0][1]?.body as ArrayBuffer))).toEqual([1, 2, 3]);
+  });
+
   test('beforeSendBatch can drop an encoded batch', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
     const exporter = new HttpTelemetryExporter({
@@ -136,7 +188,7 @@ describe('HttpTelemetryExporter', () => {
 
     await exporter.exportBytes('traces', new Uint8Array([1]));
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(await offlineQueue.sizeBytes()).toBe(1);
+    expect(await offlineQueue.sizeBytes()).toBeGreaterThan(0);
 
     setOnline(true);
     window.dispatchEvent(new Event('online'));
@@ -262,4 +314,19 @@ async function waitUntil(condition: () => boolean): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class FakeCompressionStream {
+  readonly readable: ReadableStream<Uint8Array>;
+  readonly writable: WritableStream<Uint8Array>;
+
+  constructor() {
+    const stream = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        controller.enqueue(new Uint8Array([9, ...chunk]));
+      }
+    });
+    this.readable = stream.readable;
+    this.writable = stream.writable;
+  }
 }

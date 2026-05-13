@@ -86,10 +86,13 @@ span.end();
 | `propagateTraceHeaders` | `false` | Enables trace header propagation for allowed network destinations. |
 | `propagateTraceHeadersAllowList` | `[]` | String or RegExp URL allow-list for propagation. String entries match exact origins or URL path prefixes after `new URL(entry, location.href)` normalization. |
 | `captureBodies` | `false` | Reserved for network body capture. Bodies are not captured by default. |
+| `payloadCompression` | `'gzip'` | Gzip-compresses OTLP protobuf request bodies when the browser supports `CompressionStream`. Set to `'none'` to send plain protobuf bytes. |
 | `redact.urlQueryKeys` | built-in sensitive list | Additional query-string keys to redact. |
 | `beforeSendBatch` | `undefined` | Receives encoded batch metadata `{ kind, size }`; return `false` to drop the batch. |
 
 `beforeSendBatch` runs after OTLP encoding, so it cannot mutate individual telemetry records.
+
+Compressed batches are sent with `Content-Encoding: gzip`. Configure the collector or proxy in front of it to accept gzip-encoded OTLP/HTTP requests.
 
 RegExp entries in `propagateTraceHeadersAllowList` are used as provided and can match any URL, so treat them as user-owned propagation policy.
 

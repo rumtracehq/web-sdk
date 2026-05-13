@@ -38,6 +38,7 @@ export function setupOpenTelemetry(
     collectorUrl: options.collectorUrl,
     authToken: token,
     headers: options.headers,
+    payloadCompression: options.payloadCompression,
     beforeSendBatch: options.beforeSendBatch,
     isolator
   });
