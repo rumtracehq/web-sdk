@@ -7,6 +7,7 @@ import { redactInteractionText, redactUrl } from '../core/redactor';
 
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 const MAX_ERROR_STACK_LENGTH = 4096;
+const MAX_TARGET_LABEL_LENGTH = 100;
 
 export interface CustomInstrumentationContext {
   tracer: any;
@@ -135,9 +136,11 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
 function enableInteractions(ctx: CustomInstrumentationContext): () => void {
   if (typeof document === 'undefined') return () => undefined;
   const onEvent = (event: Event) => ctx.isolator.guard('interaction', () => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target || target.closest('[data-rum-ignore]')) return;
+    const eventTarget = event.target instanceof Element ? event.target : null;
+    if (!eventTarget || eventTarget.closest('[data-rum-ignore]')) return;
+    const target = interactionTarget(eventTarget);
     const text = redactInteractionText(target, target.textContent?.trim() ?? '');
+    const targetLabel = interactionLabel(target, text);
     const span = ctx.tracer.startSpan('userInteraction', {
       attributes: {
         'interaction.type': event.type,
@@ -145,6 +148,7 @@ function enableInteractions(ctx: CustomInstrumentationContext): () => void {
         'target.id': target.id,
         'target.class': target.className.toString(),
         'target.name': target.getAttribute('data-rum-name') ?? target.getAttribute('name') ?? '',
+        'target.label': targetLabel,
         'target.text': text,
         'target.selector': selector(target)
       }
@@ -235,6 +239,47 @@ function selector(element: Element): string {
     current = current.parentElement;
   }
   return parts.join(' > ');
+}
+
+function interactionTarget(element: Element): Element {
+  return element.closest([
+    '[data-rum-name]',
+    'button',
+    'a',
+    'input',
+    'textarea',
+    'select',
+    '[role="button"]',
+    '[role="link"]',
+    '[aria-label]',
+    '[aria-labelledby]',
+    '[name]',
+    '[title]'
+  ].join(',')) ?? element;
+}
+
+function interactionLabel(element: Element, redactedText: string): string {
+  const explicit = firstNonEmpty([
+    element.getAttribute('data-rum-name'),
+    element.getAttribute('aria-label'),
+    ariaLabelledByText(element),
+    element.getAttribute('alt'),
+    element.getAttribute('title'),
+    element.getAttribute('name'),
+    element.id
+  ]);
+  const label = explicit ?? redactedText.trim();
+  return truncate(label || selector(element), MAX_TARGET_LABEL_LENGTH);
+}
+
+function ariaLabelledByText(element: Element): string {
+  const ownerDocument = element.ownerDocument;
+  const ids = element.getAttribute('aria-labelledby')?.trim().split(/\s+/).filter(Boolean) ?? [];
+  return ids.map((id) => ownerDocument.getElementById(id)?.textContent?.trim() ?? '').filter(Boolean).join(' ');
+}
+
+function firstNonEmpty(values: Array<string | null | undefined>): string | undefined {
+  return values.map((value) => value?.trim() ?? '').find(Boolean);
 }
 
 function requestAnimationFrameSafe(fn: () => void): void {

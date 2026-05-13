@@ -37,6 +37,7 @@ describe('interaction instrumentation', () => {
       'target.tag': 'button',
       'target.id': 'checkout',
       'target.class': 'primary action',
+      'target.label': 'checkout',
       'target.text': 'Buy now'
     });
     expect(spans[0].end).toHaveBeenCalledTimes(1);
@@ -69,6 +70,40 @@ describe('interaction instrumentation', () => {
 
     expect(spans).toHaveLength(1);
     expect(spans[0].attributes['target.text']).toBe('[REDACTED]');
+  });
+
+  test('uses explicit readable labels before selectors', () => {
+    const { spans, cleanup } = enableInteractionHarness();
+    const button = document.createElement('button');
+    button.setAttribute('aria-label', 'Open account menu');
+    button.className = 'rounded px-2';
+    document.body.append(button);
+
+    button.dispatchEvent(new Event('click', { bubbles: true }));
+    cleanup();
+
+    expect(spans).toHaveLength(1);
+    expect(spans[0].attributes['target.label']).toBe('Open account menu');
+    expect(spans[0].attributes['target.selector']).toBe('html > body > button.rounded.px-2');
+  });
+
+  test('labels clicks by the nearest interactive ancestor', () => {
+    const { spans, cleanup } = enableInteractionHarness();
+    const button = document.createElement('button');
+    button.setAttribute('data-rum-name', 'Checkout CTA');
+    const icon = document.createElement('span');
+    button.append(icon);
+    document.body.append(button);
+
+    icon.dispatchEvent(new Event('click', { bubbles: true }));
+    cleanup();
+
+    expect(spans).toHaveLength(1);
+    expect(spans[0].attributes).toMatchObject({
+      'target.tag': 'button',
+      'target.name': 'Checkout CTA',
+      'target.label': 'Checkout CTA'
+    });
   });
 });
 
