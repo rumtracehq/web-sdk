@@ -18,7 +18,6 @@ It sends OTLP/HTTP protobuf telemetry to:
 
 - `<collectorUrl>/v1/traces`
 - `<collectorUrl>/v1/logs`
-- `<collectorUrl>/v1/metrics`
 
 ## Install
 
@@ -37,13 +36,13 @@ npm install next react
 
 This package consumes OpenTelemetry JS instead of maintaining a custom OTLP encoder or instrumentation stack.
 
-- Providers: `WebTracerProvider`, `LoggerProvider`, `MeterProvider`
+- Providers: `WebTracerProvider`, `LoggerProvider`
 - Exporters: `@opentelemetry/exporter-*-otlp-proto`
-- Batching: `BatchSpanProcessor`, `BatchLogRecordProcessor`, `PeriodicExportingMetricReader`
+- Batching: `BatchSpanProcessor`, `BatchLogRecordProcessor`
 - Auto instrumentation: document load, fetch, XHR, user interaction
 - Resource creation: `resourceFromAttributes`
 
-SDK-owned code focuses on the RUM facade, session/user attributes, error isolation, redaction, route helpers, browser error capture, web vitals, and resource timing.
+SDK-owned code focuses on the RUM facade, session/user attributes, error isolation, redaction, route helpers, browser error capture, web vitals, and resource timing. Web Vitals are emitted as log records with `webvital.*` attributes, not OTLP metrics.
 
 ## Basic Usage
 
@@ -72,10 +71,6 @@ rum.log.info('checkout loaded', { cart_items: 3 });
 const span = rum.startSpan('apply coupon');
 span.setAttribute('coupon.code', 'SUMMER');
 span.end();
-
-rum.counter('cart.added').add(1);
-rum.gauge('cart.value').record(149.99);
-rum.histogram('checkout.duration').record(842);
 ```
 
 ## Options
@@ -103,9 +98,6 @@ RegExp entries in `propagateTraceHeadersAllowList` are used as provided and can 
 ```ts
 interface RumInstance {
   log: LogApi;
-  counter(name: string): Counter;
-  gauge(name: string): Gauge;
-  histogram(name: string): Histogram;
   startSpan(name: string, attributes?: Attributes): SpanHandle;
   addEvent(name: string, attributes?: Attributes): void;
   setGlobalAttribute(key: string, value: AttributeValue): void;

@@ -103,7 +103,6 @@ function enableCustomHarness(
       })
     },
     logger: overrides.logger ?? { emit: vi.fn() },
-    meter: {},
     session,
     options: options!,
     isolator: new ErrorIsolator()

@@ -14,7 +14,6 @@ describe('start validation', () => {
 
     const rum = start('', '', { collectorUrl: 'https://collector.example/otlp' });
     expect(() => rum.log.info('hello')).not.toThrow();
-    expect(() => rum.counter('x').add(1)).not.toThrow();
     await expect(rum.flush()).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(1);
   });

@@ -103,9 +103,6 @@ function fakeRum(): RumInstance {
       error: vi.fn(),
       fatal: vi.fn()
     }),
-    counter: vi.fn(() => ({ add: vi.fn() })),
-    gauge: vi.fn(() => ({ record: vi.fn() })),
-    histogram: vi.fn(() => ({ record: vi.fn() })),
     startSpan: vi.fn(() => handle),
     addEvent: vi.fn(),
     setGlobalAttribute: vi.fn(),

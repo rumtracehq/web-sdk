@@ -11,7 +11,6 @@ const MAX_ERROR_STACK_LENGTH = 4096;
 export interface CustomInstrumentationContext {
   tracer: any;
   logger: any;
-  meter: any;
   session: SessionManager;
   options: NormalizedOptions;
   isolator: ErrorIsolator;
@@ -162,43 +161,38 @@ function enableInteractions(ctx: CustomInstrumentationContext): () => void {
 
 function enableWebVitals(ctx: CustomInstrumentationContext): () => void {
   let disposed = false;
-  const disposers: Array<() => void> = [];
-  const gauges = new Map<string, { value: number; callback: (result: any) => void; remove: () => void }>();
 
-  const observe = (name: string, value: number, unit: string) => {
-    ctx.isolator.guard('web-vitals-observe', () => {
+  const emit = (metric: any, unit: string) => {
+    ctx.isolator.guard('web-vitals-emit', () => {
       if (disposed) return;
-      let state = gauges.get(name);
-      if (!state) {
-        const gauge = ctx.meter.createObservableGauge(name, { unit });
-        const callback = (result: any) => {
-          if (!disposed) result.observe(state?.value ?? value);
-        };
-        state = {
-          value,
-          callback,
-          remove: () => gauge.removeCallback?.(callback)
-        };
-        gauges.set(name, state);
-        gauge.addCallback(callback);
-        disposers.push(state.remove);
-      }
-      state.value = value;
+      const attributes: Attributes = {
+        'webvital.name': metric.name,
+        'webvital.value': metric.value,
+        'webvital.unit': unit,
+        'webvital.rating': metric.rating,
+        'webvital.delta': metric.delta,
+        'webvital.id': metric.id
+      };
+      if (metric.navigationType !== undefined) attributes['webvital.navigation_type'] = metric.navigationType;
+      ctx.logger.emit({
+        severityText: 'INFO',
+        severityNumber: 9,
+        body: 'webVital',
+        attributes
+      });
     }, undefined);
   };
 
   import('web-vitals').then((vitals) => {
     if (disposed) return;
-    vitals.onLCP?.((metric) => observe('webvital.lcp', metric.value, 'ms'));
-    vitals.onCLS?.((metric) => observe('webvital.cls', metric.value, '1'));
-    vitals.onINP?.((metric) => observe('webvital.inp', metric.value, 'ms'));
-    vitals.onFCP?.((metric) => observe('webvital.fcp', metric.value, 'ms'));
-    vitals.onTTFB?.((metric) => observe('webvital.ttfb', metric.value, 'ms'));
+    vitals.onLCP?.((metric) => emit(metric, 'ms'));
+    vitals.onCLS?.((metric) => emit(metric, '1'));
+    vitals.onINP?.((metric) => emit(metric, 'ms'));
+    vitals.onFCP?.((metric) => emit(metric, 'ms'));
+    vitals.onTTFB?.((metric) => emit(metric, 'ms'));
   }).catch(() => undefined);
   return () => {
     disposed = true;
-    for (const dispose of disposers.splice(0)) dispose();
-    gauges.clear();
   };
 }
 

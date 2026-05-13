@@ -32,20 +32,8 @@ export interface RumOptions {
 }
 
 export interface TelemetryBatchMetadata {
-  kind: 'traces' | 'logs' | 'metrics';
+  kind: 'traces' | 'logs';
   size: number;
-}
-
-export interface Counter {
-  add(value: number, attributes?: Attributes): void;
-}
-
-export interface Gauge {
-  record(value: number, attributes?: Attributes): void;
-}
-
-export interface Histogram {
-  record(value: number, attributes?: Attributes): void;
 }
 
 export interface SpanHandle {
@@ -67,9 +55,6 @@ export interface LogApi {
 
 export interface RumInstance {
   log: LogApi;
-  counter(name: string): Counter;
-  gauge(name: string): Gauge;
-  histogram(name: string): Histogram;
   startSpan(name: string, attributes?: Attributes): SpanHandle;
   addEvent(name: string, attributes?: Attributes): void;
   setGlobalAttribute(key: string, value: AttributeValue): void;

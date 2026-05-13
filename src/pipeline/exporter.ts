@@ -1,14 +1,13 @@
 import { ExportResultCode } from '@opentelemetry/core';
-import { AggregationTemporality, type InstrumentType, type PushMetricExporter, type ResourceMetrics } from '@opentelemetry/sdk-metrics';
 import type { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import type { LogRecordExporter, ReadableLogRecord } from '@opentelemetry/sdk-logs';
-import { encodeLogsRequest, encodeMetricsRequest, encodeTraceRequest } from '../otlp/encode';
+import { encodeLogsRequest, encodeTraceRequest } from '../otlp/encode';
 import type { NormalizedOptions } from '../core/options';
 import { ErrorIsolator } from '../core/error-isolator';
 import { RetryController } from './retry-controller';
 import { OfflineQueue } from './offline-queue';
 
-type TelemetryKind = 'traces' | 'logs' | 'metrics';
+type TelemetryKind = 'traces' | 'logs';
 
 export interface HttpTelemetryExporterOptions {
   collectorUrl: string;
@@ -173,29 +172,6 @@ export class RumLogExporter implements LogRecordExporter {
 
   forceFlush(): Promise<void> {
     return Promise.resolve();
-  }
-}
-
-export class RumMetricExporter implements PushMetricExporter {
-  constructor(private readonly http: HttpTelemetryExporter) {}
-
-  export(metrics: ResourceMetrics, resultCallback: (result: { code: ExportResultCode; error?: Error }) => void): void {
-    this.http.exportBytes('metrics', encodeMetricsRequest(metrics)).then(
-      () => resultCallback({ code: ExportResultCode.SUCCESS }),
-      (error) => resultCallback({ code: ExportResultCode.FAILED, error })
-    );
-  }
-
-  selectAggregationTemporality(_instrumentType: InstrumentType): AggregationTemporality {
-    return AggregationTemporality.CUMULATIVE;
-  }
-
-  forceFlush(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  shutdown(): Promise<void> {
-    return this.http.shutdown();
   }
 }
 

@@ -44,21 +44,4 @@ export interface LogRecord {
   resource: Resource;
 }
 
-export interface MetricPoint {
-  name: string;
-  kind: 'COUNTER' | 'GAUGE' | 'HISTOGRAM';
-  unit?: string;
-  timeUnixNano: bigint;
-  startTimeUnixNano?: bigint;
-  value: number;
-  histogram?: {
-    count: number;
-    sum: number;
-    bounds: number[];
-    counts: number[];
-  };
-  attributes: Attributes;
-  resource: Resource;
-}
-
-export type TelemetryRecord = Span | LogRecord | MetricPoint;
+export type TelemetryRecord = Span | LogRecord;

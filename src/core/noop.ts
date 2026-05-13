@@ -1,4 +1,4 @@
-import type { Counter, Gauge, Histogram, LogApi, RumInstance, SpanHandle } from '../types';
+import type { LogApi, RumInstance, SpanHandle } from '../types';
 
 const noop = () => undefined;
 
@@ -8,10 +8,6 @@ const noopHandle: SpanHandle = {
   setStatus: noop,
   end: noop
 };
-
-const noopCounter: Counter = { add: noop };
-const noopGauge: Gauge = { record: noop };
-const noopHistogram: Histogram = { record: noop };
 
 function makeLog(): LogApi {
   const log = ((_severity, _body, _attributes) => undefined) as LogApi;
@@ -27,9 +23,6 @@ function makeLog(): LogApi {
 export function createNoopRumInstance(): RumInstance {
   return {
     log: makeLog(),
-    counter: () => noopCounter,
-    gauge: () => noopGauge,
-    histogram: () => noopHistogram,
     startSpan: () => noopHandle,
     addEvent: noop,
     setGlobalAttribute: noop,

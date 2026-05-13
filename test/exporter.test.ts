@@ -61,7 +61,7 @@ describe('HttpTelemetryExporter', () => {
       fetchImpl
     });
 
-    await exporter.exportBytes('metrics', new Uint8Array([1]));
+    await exporter.exportBytes('logs', new Uint8Array([1]));
 
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -77,9 +77,9 @@ describe('HttpTelemetryExporter', () => {
       fetchImpl
     });
 
-    await exporter.exportBytes('metrics', new Uint8Array([1]));
+    await exporter.exportBytes('logs', new Uint8Array([1]));
 
-    expect(beforeSendBatch).toHaveBeenCalledWith({ kind: 'metrics', size: 1 });
+    expect(beforeSendBatch).toHaveBeenCalledWith({ kind: 'logs', size: 1 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -96,7 +96,7 @@ describe('HttpTelemetryExporter', () => {
       fetchImpl
     });
 
-    await exporter.exportBytes('metrics', new Uint8Array([1]));
+    await exporter.exportBytes('logs', new Uint8Array([1]));
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);

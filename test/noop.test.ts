@@ -7,9 +7,6 @@ describe('createNoopRumInstance', () => {
 
     expect(() => rum.log.info('hello')).not.toThrow();
     expect(() => rum.log.error('hello')).not.toThrow();
-    expect(() => rum.counter('count').add(1)).not.toThrow();
-    expect(() => rum.gauge('gauge').record(1)).not.toThrow();
-    expect(() => rum.histogram('histogram').record(1)).not.toThrow();
     expect(() => rum.startSpan('span').setStatus('OK')).not.toThrow();
     expect(() => rum.startSpan('span').addEvent('event')).not.toThrow();
     expect(() => rum.startSpan('span').end()).not.toThrow();

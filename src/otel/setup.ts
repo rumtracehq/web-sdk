@@ -1,23 +1,20 @@
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
-import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import { metrics, trace } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 import type { Attributes } from '../types';
 import type { NormalizedOptions } from '../core/options';
 import { RumAttributeSpanProcessor } from './span-processor';
 import { SDK_VERSION } from '../version';
-import { HttpTelemetryExporter, RumLogExporter, RumMetricExporter, RumSpanExporter } from '../pipeline/exporter';
+import { HttpTelemetryExporter, RumLogExporter, RumSpanExporter } from '../pipeline/exporter';
 import { ErrorIsolator } from '../core/error-isolator';
 
 export interface OTelRuntime {
   tracerProvider: WebTracerProvider;
   loggerProvider: LoggerProvider;
-  meterProvider: MeterProvider;
   tracer: ReturnType<typeof trace.getTracer>;
   logger: ReturnType<LoggerProvider['getLogger']>;
-  meter: ReturnType<MeterProvider['getMeter']>;
   cleanup: Array<() => void>;
 }
 
@@ -46,7 +43,6 @@ export function setupOpenTelemetry(
   });
   const traceExporter = new RumSpanExporter(httpExporter);
   const logExporter = new RumLogExporter(httpExporter);
-  const metricExporter = new RumMetricExporter(httpExporter);
 
   const tracerProvider = new WebTracerProvider({
     resource,
@@ -62,24 +58,18 @@ export function setupOpenTelemetry(
     processors: [new BatchLogRecordProcessor(logExporter, { maxExportBatchSize: 512, scheduledDelayMillis: 5000 })]
   });
 
-  const metricReader = new PeriodicExportingMetricReader({ exporter: metricExporter, exportIntervalMillis: 5000 });
-  const meterProvider = new MeterProvider({ resource, readers: [metricReader] });
-  metrics.setGlobalMeterProvider(meterProvider);
   const cleanup = [enablePageExitFlush(httpExporter, async () => {
     await Promise.all([
       tracerProvider.forceFlush(),
-      loggerProvider.forceFlush(),
-      meterProvider.forceFlush()
+      loggerProvider.forceFlush()
     ]);
   }, isolator)];
 
   return {
     tracerProvider,
     loggerProvider,
-    meterProvider,
     tracer: tracerProvider.getTracer('rum-web-sdk', SDK_VERSION),
     logger: loggerProvider.getLogger('rum-web-sdk', SDK_VERSION),
-    meter: meterProvider.getMeter('rum-web-sdk', SDK_VERSION),
     cleanup
   };
 }

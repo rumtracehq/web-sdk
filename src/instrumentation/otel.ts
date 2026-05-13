@@ -1,4 +1,4 @@
-import type { MeterProvider, Span, TracerProvider } from '@opentelemetry/api';
+import type { Span, TracerProvider } from '@opentelemetry/api';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { DocumentLoadInstrumentation } from '@opentelemetry/instrumentation-document-load';
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
@@ -10,7 +10,7 @@ import { normalizeTraceHeaderAllowList, traceHeaderUrlPattern } from './fetch-pr
 
 export function registerOtelInstrumentations(
   options: NormalizedOptions,
-  providers: { tracerProvider?: TracerProvider; meterProvider?: MeterProvider } = {}
+  providers: { tracerProvider?: TracerProvider } = {}
 ): Array<{ disable(): void }> {
   const enabled = new Set<InstrumentationName>(options.enabledInstrumentations);
   const instrumentations: Array<{ disable(): void }> = [];

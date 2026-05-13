@@ -1,5 +1,5 @@
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import type { Attributes, AttributeValue, Counter, Gauge, Histogram, LogApi, RumInstance, Severity, SpanHandle } from './types';
+import type { Attributes, AttributeValue, LogApi, RumInstance, Severity, SpanHandle } from './types';
 import { ErrorIsolator } from './core/error-isolator';
 import { SessionManager } from './core/session';
 import { UserIdentifierStore } from './core/user';
@@ -17,9 +17,6 @@ const SEVERITY_NUMBER: Record<Severity, number> = {
 
 export class OpenTelemetryRumInstance implements RumInstance {
   readonly log: LogApi;
-  private readonly counters = new Map<string, Counter>();
-  private readonly gauges = new Map<string, { api: Gauge; latest: Array<{ value: number; attributes?: Attributes }> }>();
-  private readonly histograms = new Map<string, Histogram>();
   private readonly activeSpans: Array<{ span: ReturnType<OTelRuntime['tracer']['startSpan']>; timer: ReturnType<typeof setTimeout> }> = [];
   private shutdownPromise: Promise<void> | undefined;
   private isShutdown = false;
@@ -44,58 +41,6 @@ export class OpenTelemetryRumInstance implements RumInstance {
 
   addCleanup(cleanup: Array<() => void>): void {
     this.cleanup.push(...cleanup);
-  }
-
-  counter(name: string): Counter {
-    return this.isolator.guard('counter', () => {
-      const existing = this.counters.get(name);
-      if (existing) return existing;
-      const instrument = this.runtime.meter.createCounter(name);
-      const api: Counter = {
-        add: (value, attributes) => {
-          if (!this.acceptMetricValue(value) || value < 0) return;
-          instrument.add(value, this.attributes.current(attributes) as never);
-        }
-      };
-      this.counters.set(name, api);
-      return api;
-    }, { add: () => undefined });
-  }
-
-  gauge(name: string): Gauge {
-    return this.isolator.guard('gauge', () => {
-      const existing = this.gauges.get(name);
-      if (existing) return existing.api;
-      const state = { latest: [] as Array<{ value: number; attributes?: Attributes }> };
-      const instrument = this.runtime.meter.createObservableGauge(name);
-      instrument.addCallback((result) => {
-        for (const point of state.latest) result.observe(point.value, point.attributes as never);
-      });
-      const api: Gauge = {
-        record: (value, attributes) => {
-          if (!this.acceptMetricValue(value)) return;
-          state.latest = [{ value, attributes: this.attributes.current(attributes) }];
-        }
-      };
-      this.gauges.set(name, { api, latest: state.latest });
-      return api;
-    }, { record: () => undefined });
-  }
-
-  histogram(name: string): Histogram {
-    return this.isolator.guard('histogram', () => {
-      const existing = this.histograms.get(name);
-      if (existing) return existing;
-      const instrument = this.runtime.meter.createHistogram(name);
-      const api: Histogram = {
-        record: (value, attributes) => {
-          if (!this.acceptMetricValue(value)) return;
-          instrument.record(value, this.attributes.current(attributes) as never);
-        }
-      };
-      this.histograms.set(name, api);
-      return api;
-    }, { record: () => undefined });
   }
 
   startSpan(name: string, attributes?: Attributes): SpanHandle {
@@ -150,8 +95,7 @@ export class OpenTelemetryRumInstance implements RumInstance {
     await this.isolator.guardAsync('flush', async () => {
       await Promise.all([
         this.runtime.tracerProvider.forceFlush(),
-        this.runtime.loggerProvider.forceFlush(),
-        this.runtime.meterProvider.forceFlush()
+        this.runtime.loggerProvider.forceFlush()
       ]);
     }, undefined);
   }
@@ -165,8 +109,7 @@ export class OpenTelemetryRumInstance implements RumInstance {
       for (const dispose of this.cleanup.splice(0)) dispose();
       await Promise.all([
         this.runtime.tracerProvider.shutdown(),
-        this.runtime.loggerProvider.shutdown(),
-        this.runtime.meterProvider.shutdown()
+        this.runtime.loggerProvider.shutdown()
       ]);
     }, undefined);
     return this.shutdownPromise;
@@ -211,14 +154,6 @@ export class OpenTelemetryRumInstance implements RumInstance {
     span.end();
   }
 
-  private acceptMetricValue(value: number): boolean {
-    if (this.isShutdown || !this.session.sampled) return false;
-    if (!Number.isFinite(value)) {
-      this.isolator.warn('invalid-metric-value', 'metric values must be finite numbers');
-      return false;
-    }
-    return true;
-  }
 }
 
 const noopSpanHandle: SpanHandle = {

@@ -11,7 +11,7 @@ import { enableCustomInstrumentations } from './instrumentation/custom';
 import { enableFetchTracePropagation } from './instrumentation/fetch-propagation';
 import { OpenTelemetryRumInstance } from './instance';
 
-export type { AttributeValue, Attributes, Counter, Gauge, Histogram, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle, TelemetryBatchMetadata } from './types';
+export type { AttributeValue, Attributes, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle, TelemetryBatchMetadata } from './types';
 export { redactHeaders, redactInteractionText, redactUrl } from './core/redactor';
 
 declare global {
@@ -55,8 +55,7 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       isolator
     );
     const otelInstrumentations = registerOtelInstrumentations(normalized, {
-      tracerProvider: runtime.tracerProvider,
-      meterProvider: runtime.meterProvider
+      tracerProvider: runtime.tracerProvider
     });
     const instance = new OpenTelemetryRumInstance(runtime, session, users, attributes, isolator, []);
     const cleanup = [
@@ -66,7 +65,6 @@ export function start(appName: string, authToken: string, options?: RumOptions):
       ...enableCustomInstrumentations({
         tracer: runtime.tracer,
         logger: runtime.logger,
-        meter: runtime.meter,
         session,
         options: normalized,
         isolator

@@ -90,7 +90,6 @@ function enableInteractionHarness(): {
       })
     },
     logger: {},
-    meter: {},
     session: {},
     options: options!,
     isolator: new ErrorIsolator()
