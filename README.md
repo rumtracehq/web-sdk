@@ -166,6 +166,8 @@ Sensitive input interaction text for `password`, `email`, `tel`, and `credit-car
 
 Interaction telemetry uses the SDK's custom click/submit instrumentation by default. Add `data-rum-ignore` to an element or ancestor to suppress interaction spans for that subtree.
 
+`setUser(userId, attributes)` does not automatically redact, hash, or mask values. Do not pass raw PII such as email addresses, phone numbers, names, or internal identifiers unless your telemetry policy allows it. Hash or sanitize user values before calling `setUser`.
+
 ## Build And Test
 
 ```sh
