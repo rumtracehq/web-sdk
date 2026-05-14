@@ -15,9 +15,17 @@ const SEVERITY_NUMBER: Record<Severity, number> = {
   FATAL: 21
 };
 
+type RuntimeSpan = ReturnType<OTelRuntime['tracer']['startSpan']>;
+
+interface ActiveSpan {
+  span: RuntimeSpan;
+  timer: ReturnType<typeof setTimeout>;
+  ended: boolean;
+}
+
 export class OpenTelemetryRumInstance implements RumInstance {
   readonly log: LogApi;
-  private readonly activeSpans: Array<{ span: ReturnType<OTelRuntime['tracer']['startSpan']>; timer: ReturnType<typeof setTimeout> }> = [];
+  private readonly activeSpans: ActiveSpan[] = [];
   private shutdownPromise: Promise<void> | undefined;
   private isShutdown = false;
 
@@ -51,10 +59,11 @@ export class OpenTelemetryRumInstance implements RumInstance {
       const span = this.runtime.tracer.startSpan(name, { attributes: this.attributes.current(attributes) as never }, parentContext);
       const timer = setTimeout(() => {
         span.setAttribute('rum.auto_ended', true);
-        this.endSpan(span);
+        this.endSpan(item);
       }, 30_000);
-      this.activeSpans.push({ span, timer });
-      return this.handleFor(span);
+      const item: ActiveSpan = { span, timer, ended: false };
+      this.activeSpans.push(item);
+      return this.handleFor(item);
     }, noopSpanHandle);
   }
 
@@ -104,9 +113,11 @@ export class OpenTelemetryRumInstance implements RumInstance {
     if (this.shutdownPromise) return this.shutdownPromise;
     this.shutdownPromise = this.isolator.guardAsync('shutdown', async () => {
       this.isShutdown = true;
-      for (const item of this.activeSpans) clearTimeout(item.timer);
-      this.activeSpans.length = 0;
-      for (const dispose of this.cleanup.splice(0)) dispose();
+      for (const item of [...this.activeSpans]) {
+        item.span.setAttribute('rum.ended_on_shutdown', true);
+        this.endSpan(item);
+      }
+      for (const dispose of this.cleanup.splice(0)) this.isolator.guard('cleanup', dispose, undefined);
       await Promise.all([
         this.runtime.tracerProvider.shutdown(),
         this.runtime.loggerProvider.shutdown()
@@ -129,29 +140,24 @@ export class OpenTelemetryRumInstance implements RumInstance {
     }, undefined);
   }
 
-  private handleFor(span: ReturnType<OTelRuntime['tracer']['startSpan']>): SpanHandle {
-    let ended = false;
+  private handleFor(item: ActiveSpan): SpanHandle {
     return {
-      setAttribute: (key, value) => this.isolator.guard('span-set-attribute', () => span.setAttribute(key, value as never), undefined),
-      addEvent: (name, attributes) => this.isolator.guard('span-add-event', () => span.addEvent(name, this.attributes.current(attributes) as never), undefined),
+      setAttribute: (key, value) => this.isolator.guard('span-set-attribute', () => item.span.setAttribute(key, value as never), undefined),
+      addEvent: (name, attributes) => this.isolator.guard('span-add-event', () => item.span.addEvent(name, this.attributes.current(attributes) as never), undefined),
       setStatus: (status, message) => this.isolator.guard('span-set-status', () => {
-        span.setStatus({ code: status === 'ERROR' ? SpanStatusCode.ERROR : status === 'OK' ? SpanStatusCode.OK : SpanStatusCode.UNSET, message });
+        item.span.setStatus({ code: status === 'ERROR' ? SpanStatusCode.ERROR : status === 'OK' ? SpanStatusCode.OK : SpanStatusCode.UNSET, message });
       }, undefined),
-      end: () => {
-        if (ended) return;
-        ended = true;
-        this.endSpan(span);
-      }
+      end: () => this.endSpan(item)
     };
   }
 
-  private endSpan(span: ReturnType<OTelRuntime['tracer']['startSpan']>): void {
-    const index = this.activeSpans.findIndex((item) => item.span === span);
-    if (index >= 0) {
-      clearTimeout(this.activeSpans[index].timer);
-      this.activeSpans.splice(index, 1);
-    }
-    span.end();
+  private endSpan(item: ActiveSpan): void {
+    if (item.ended) return;
+    item.ended = true;
+    clearTimeout(item.timer);
+    const index = this.activeSpans.indexOf(item);
+    if (index >= 0) this.activeSpans.splice(index, 1);
+    item.span.end();
   }
 
 }

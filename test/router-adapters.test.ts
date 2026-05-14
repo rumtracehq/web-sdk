@@ -10,6 +10,8 @@ import { RumRouterTracker, trackReactRouterNavigation } from '../src/react-route
 describe('router adapter helpers', () => {
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.doUnmock('next/router');
+    vi.resetModules();
   });
 
   test('trackReactRouterNavigation emits routeChange with pattern and params', () => {
@@ -66,6 +68,34 @@ describe('router adapter helpers', () => {
 
     expect(rum.startSpan).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
+  });
+
+  test('enableNextPagesRouter closes a superseded active navigation', async () => {
+    const handlers = new Map<string, Array<(...args: any[]) => void>>();
+    const events = {
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+      }),
+      off: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, (handlers.get(event) ?? []).filter((item) => item !== handler));
+      })
+    };
+    vi.doMock('next/router', () => ({ default: { events } }));
+    const { enableNextPagesRouter } = await import('../src/next-pages-router');
+    const first: SpanHandle = { setAttribute: vi.fn(), addEvent: vi.fn(), setStatus: vi.fn(), end: vi.fn() };
+    const second: SpanHandle = { setAttribute: vi.fn(), addEvent: vi.fn(), setStatus: vi.fn(), end: vi.fn() };
+    const rum = fakeRum();
+    vi.mocked(rum.startSpan).mockReturnValueOnce(first).mockReturnValueOnce(second);
+
+    const cleanup = await enableNextPagesRouter(rum);
+    handlers.get('routeChangeStart')?.[0]('/first');
+    handlers.get('routeChangeStart')?.[0]('/second');
+    cleanup();
+
+    expect(first.setStatus).toHaveBeenCalledWith('ERROR', 'Navigation superseded');
+    expect(first.end).toHaveBeenCalledTimes(1);
+    expect(second.end).not.toHaveBeenCalled();
+    expect(events.off).toHaveBeenCalledTimes(3);
   });
 
   test('RumNextAppTracker emits in an effect and deduplicates the same route', async () => {

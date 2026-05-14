@@ -11,6 +11,8 @@ export async function enableNextPagesRouter(rum: RumInstance, options: NextPages
   let active: ReturnType<RumInstance['startSpan']> | undefined;
   const redactRouteUrl = (url: string) => redactUrl(url, options.redact?.urlQueryKeys);
   const onStart = (url: string) => {
+    active?.setStatus('ERROR', 'Navigation superseded');
+    active?.end();
     active = rum.startSpan('routeChange', { 'next.router': 'pages', 'route.url': redactRouteUrl(url) });
   };
   const onComplete = (url: string) => {

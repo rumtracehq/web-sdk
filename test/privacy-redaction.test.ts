@@ -9,6 +9,7 @@ describe('privacy redaction', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     history.replaceState(null, '', '/');
   });
 
@@ -32,7 +33,7 @@ describe('privacy redaction', () => {
     const logger = { emit: vi.fn() };
     const { cleanup } = enableCustomHarness(['error'], { logger });
     const error = new Error('x'.repeat(2000));
-    error.stack = 's'.repeat(5000);
+    error.stack = `Error: boom\n    at fn (https://app.example/main.js?token=secret:1:2)\n${'s'.repeat(5000)}`;
 
     window.dispatchEvent(new ErrorEvent('error', {
       message: 'm'.repeat(2000),
@@ -48,8 +49,43 @@ describe('privacy redaction', () => {
     const record = logger.emit.mock.calls[0][0];
     expect(record.body).toHaveLength(1024);
     expect(record.attributes['error.stack']).toHaveLength(4096);
+    expect(record.attributes['error.stack']).toContain('token=%5BREDACTED%5D');
+    expect(record.attributes['error.stack']).not.toContain('secret');
     expect(record.attributes['source.file']).toContain('token=%5BREDACTED%5D');
     expect(record.attributes['source.file']).not.toContain('secret');
+  });
+
+  test('flushes pending debounced errors during cleanup', () => {
+    vi.useFakeTimers();
+    const logger = { emit: vi.fn() };
+    const { cleanup } = enableCustomHarness(['error'], { logger });
+
+    window.dispatchEvent(new ErrorEvent('error', {
+      message: 'boom',
+      filename: 'https://app.example/main.js',
+      error: new Error('boom')
+    }));
+    cleanup();
+
+    expect(logger.emit).toHaveBeenCalledTimes(1);
+    expect(logger.emit.mock.calls[0][0].attributes['error.count']).toBe(1);
+  });
+
+  test('observes buffered resource timing entries when supported', () => {
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    class FakePerformanceObserver {
+      constructor(_callback: PerformanceObserverCallback) {}
+      observe = observe;
+      disconnect = disconnect;
+    }
+    vi.stubGlobal('PerformanceObserver', FakePerformanceObserver);
+
+    const { cleanup } = enableCustomHarness(['resource-timing']);
+    cleanup();
+
+    expect(observe).toHaveBeenCalledWith({ type: 'resource', buffered: true });
+    expect(disconnect).toHaveBeenCalledTimes(1);
   });
 
   test('redacts network span URL attributes in OTel instrumentation hooks', () => {

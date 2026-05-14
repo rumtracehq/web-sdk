@@ -18,6 +18,14 @@ export function redactHeaders(headers: Record<string, string>, keys: string[] = 
   return Object.fromEntries(Object.entries(headers).filter(([key]) => !sensitive.has(key.toLowerCase())));
 }
 
+export function redactStackTrace(stack: string, extraKeys: string[] = []): string {
+  return stack.replace(/https?:\/\/[^\s"'<>]+/g, (match) => {
+    const trailing = match.match(/[)\].,;]+$/)?.[0] ?? '';
+    const url = trailing ? match.slice(0, -trailing.length) : match;
+    return `${redactUrl(url, extraKeys)}${trailing}`;
+  });
+}
+
 export function redactInteractionText(element: Element | null, text: string): string {
   if (element instanceof HTMLInputElement) {
     const type = element.type.toLowerCase();

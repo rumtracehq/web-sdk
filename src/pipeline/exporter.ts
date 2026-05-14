@@ -9,6 +9,8 @@ import { OfflineQueue } from './offline-queue';
 
 type TelemetryKind = 'traces' | 'logs';
 
+const KEEPALIVE_MAX_BODY_BYTES = 60 * 1024;
+
 export interface HttpTelemetryExporterOptions {
   collectorUrl: string;
   authToken: string;
@@ -67,12 +69,16 @@ export class HttpTelemetryExporter {
     };
     const bodyBuffer = toArrayBuffer(compressed.body);
     const batch = { path, contentType: headers['Content-Type'], body: bodyBuffer, headers };
+    if (unloading && bodyBuffer.byteLength > KEEPALIVE_MAX_BODY_BYTES) {
+      await this.offlineQueue.enqueue(batch);
+      return;
+    }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       await this.offlineQueue.enqueue(batch);
       return;
     }
     // Authenticated exports need fetch keepalive because sendBeacon cannot attach custom headers.
-    if (unloading && this.canBeacon(body, headers)) {
+    if (unloading && this.canBeacon(bodyBuffer, headers)) {
       const ok = (this.options.beacon ?? navigator.sendBeacon.bind(navigator))(`${this.collectorUrl}${path}`, new Blob([bodyBuffer], { type: 'application/x-protobuf' }));
       if (ok) return;
     }
@@ -139,9 +145,9 @@ export class HttpTelemetryExporter {
     return () => window.removeEventListener('online', onOnline);
   }
 
-  private canBeacon(body: Uint8Array, headers: Record<string, string>): boolean {
+  private canBeacon(body: ArrayBuffer, headers: Record<string, string>): boolean {
     if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return false;
-    if (body.byteLength > 60 * 1024) return false;
+    if (body.byteLength > KEEPALIVE_MAX_BODY_BYTES) return false;
     const customHeaders = Object.keys(headers).filter((key) => key.toLowerCase() !== 'content-type');
     return customHeaders.length === 0;
   }

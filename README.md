@@ -28,21 +28,24 @@ npm install @rumtrace/web-sdk
 Optional router integrations use peer dependencies from the host app:
 
 ```sh
-npm install react react-router
+npm install react
 npm install next react
+npm install react-router
 ```
 
 ## OpenTelemetry Usage
 
-This package consumes OpenTelemetry JS instead of maintaining a custom OTLP encoder or instrumentation stack.
+This package consumes OpenTelemetry JS for providers, browser auto-instrumentation, batching, and OTLP protobuf serialization while keeping a small SDK-owned HTTP exporter for browser-specific delivery behavior.
 
 - Providers: `WebTracerProvider`, `LoggerProvider`
-- Exporters: `@opentelemetry/exporter-*-otlp-proto`
+- Serialization: `@opentelemetry/otlp-transformer`
+- Export: SDK `HttpTelemetryExporter` with retry, gzip support, unload delivery, and offline queue replay
 - Batching: `BatchSpanProcessor`, `BatchLogRecordProcessor`
-- Auto instrumentation: document load, fetch, XHR, user interaction
+- OpenTelemetry auto instrumentation: document load, fetch, XHR
+- SDK custom instrumentation: route changes, browser errors, interactions, Web Vitals, resource timing
 - Resource creation: `resourceFromAttributes`
 
-SDK-owned code focuses on the RUM facade, session/user attributes, error isolation, redaction, route helpers, browser error capture, web vitals, and resource timing. Web Vitals are emitted as log records with `webvital.*` attributes, not OTLP metrics.
+SDK-owned code focuses on the RUM facade, session/user attributes, error isolation, redaction, route helpers, browser error capture, web vitals, resource timing, and offline queue persistence. Web Vitals are emitted as log records with `webvital.*` attributes, not OTLP metrics.
 
 ## Basic Usage
 
@@ -191,4 +194,4 @@ The test suite uses Vitest, Happy DOM, and fast-check. Property tests use the de
 
 ## Current Scope
 
-This is a functional OpenTelemetry-based SDK foundation. It intentionally relies on upstream OpenTelemetry for OTLP protobuf serialization, exporters, batching, and core browser auto-instrumentation. The next hardening steps are full OTLP round-trip properties, mock collector integration tests, offline queue persistence, bundle-size CI, and browser smoke tests.
+This is a functional OpenTelemetry-based SDK foundation. It relies on upstream OpenTelemetry for providers, OTLP protobuf serialization, batching, and core browser auto-instrumentation, with SDK-owned browser delivery and persistence. The next hardening steps are full OTLP round-trip properties, mock collector integration tests, and browser smoke tests.

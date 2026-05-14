@@ -154,6 +154,27 @@ describe('HttpTelemetryExporter', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  test('queues oversized unload payloads instead of attempting keepalive fetch', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    setOnline(true);
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
+    const offlineQueue = new OfflineQueue({ memoryCapBytes: 128 * 1024 });
+    const exporter = new HttpTelemetryExporter({
+      collectorUrl: 'https://collector.example/otlp',
+      authToken: 'token',
+      headers: {},
+      payloadCompression: 'none',
+      fetchImpl,
+      offlineQueue
+    });
+
+    await exporter.withUnloadDelivery(() => exporter.exportBytes('traces', new Uint8Array(60 * 1024 + 1)));
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(await offlineQueue.sizeBytes()).toBe(60 * 1024 + 1);
+    await exporter.shutdown();
+  });
+
   test('uses keepalive fetch during unload when auth headers prevent beacon', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch & { mock: { calls: any[][] } };
     const beacon = vi.fn(() => true);

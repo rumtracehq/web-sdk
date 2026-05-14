@@ -1,9 +1,8 @@
-import { SpanStatusCode } from '@opentelemetry/api';
 import type { Attributes, InstrumentationName } from '../types';
 import type { NormalizedOptions } from '../core/options';
 import type { SessionManager } from '../core/session';
 import type { ErrorIsolator } from '../core/error-isolator';
-import { redactInteractionText, redactUrl } from '../core/redactor';
+import { redactInteractionText, redactStackTrace, redactUrl } from '../core/redactor';
 
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 const MAX_ERROR_STACK_LENGTH = 4096;
@@ -77,6 +76,13 @@ function enableRouteChange(ctx: CustomInstrumentationContext): () => void {
 function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
   if (typeof window === 'undefined') return () => undefined;
   const pending = new Map<string, { count: number; timer: ReturnType<typeof setTimeout>; record: Record<string, unknown> }>();
+  const emitPending = (key: string) => {
+    const item = pending.get(key);
+    pending.delete(key);
+    if (!item) return;
+    const attributes = { ...(item.record.attributes as Record<string, unknown>), 'error.count': item.count };
+    ctx.logger.emit({ ...item.record, attributes });
+  };
   const schedule = (record: Record<string, unknown>) => {
     const attrs = record.attributes as Record<string, unknown>;
     const key = `${attrs['error.type']}|${record.body}|${attrs['source.file']}|${attrs['source.line']}|${attrs['source.column']}`;
@@ -85,13 +91,7 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
       existing.count += 1;
       return;
     }
-    const timer = setTimeout(() => {
-      const item = pending.get(key);
-      pending.delete(key);
-      if (!item) return;
-      const attributes = { ...(item.record.attributes as Record<string, unknown>), 'error.count': item.count };
-      ctx.logger.emit({ ...item.record, attributes });
-    }, 1000);
+    const timer = setTimeout(() => emitPending(key), 1000);
     pending.set(key, { count: 1, timer, record });
   };
 
@@ -102,7 +102,7 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
       body: truncate(event.message, MAX_ERROR_MESSAGE_LENGTH),
       attributes: {
         'error.type': event.error?.name ?? 'Error',
-        'error.stack': truncate(event.error?.stack ?? '', MAX_ERROR_STACK_LENGTH),
+        'error.stack': truncate(redactStackTrace(event.error?.stack ?? '', ctx.options.redact?.urlQueryKeys), MAX_ERROR_STACK_LENGTH),
         'source.file': redactUrl(event.filename ?? '', ctx.options.redact?.urlQueryKeys),
         'source.line': event.lineno ?? 0,
         'source.column': event.colno ?? 0
@@ -118,7 +118,7 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
       body: truncate(reason instanceof Error ? reason.message : stringify(reason), MAX_ERROR_MESSAGE_LENGTH),
       attributes: {
         'error.type': 'UnhandledPromiseRejection',
-        'error.stack': truncate(reason instanceof Error ? reason.stack ?? '' : '', MAX_ERROR_STACK_LENGTH)
+        'error.stack': truncate(redactStackTrace(reason instanceof Error ? reason.stack ?? '' : '', ctx.options.redact?.urlQueryKeys), MAX_ERROR_STACK_LENGTH)
       }
     });
   }, undefined);
@@ -128,8 +128,10 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
   return () => {
     window.removeEventListener('error', onError);
     window.removeEventListener('unhandledrejection', onRejection);
-    for (const item of pending.values()) clearTimeout(item.timer);
-    pending.clear();
+    for (const [key, item] of [...pending]) {
+      clearTimeout(item.timer);
+      emitPending(key);
+    }
   };
 }
 
@@ -223,7 +225,11 @@ function enableResourceTiming(ctx: CustomInstrumentationContext): () => void {
       }
     }, undefined);
   });
-  observer.observe({ entryTypes: ['resource'] });
+  try {
+    observer.observe({ type: 'resource', buffered: true });
+  } catch {
+    observer.observe({ entryTypes: ['resource'] });
+  }
   return () => observer.disconnect();
 }
 
