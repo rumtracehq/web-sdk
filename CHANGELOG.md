@@ -1,5 +1,11 @@
 # @rumtrace/web-sdk
 
+## 0.3.0
+
+### Minor Changes
+
+- ce732df: Remove custom metrics support and emit Web Vitals as log telemetry instead of OTLP metrics.
+
 ## 0.2.1
 
 ### Patch Changes
