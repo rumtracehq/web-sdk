@@ -29,12 +29,18 @@ export function registerOtelInstrumentations(
         ignoreUrls: [collectorUrlPattern],
         propagateTraceHeaderCorsUrls: traceHeaderAllowList,
         requestHook: (span, request) => redactNetworkUrl(span, isRequest(request) ? request.url : undefined),
-        applyCustomAttributesOnSpan: (span, request, result) => redactNetworkUrl(span, fetchResultUrl(request, result))
+        applyCustomAttributesOnSpan: (span, request, result) => {
+          redactNetworkUrl(span, fetchResultUrl(request, result));
+          setHttpResponseStatus(span, result);
+        }
       }),
       new XMLHttpRequestInstrumentation({
         ignoreUrls: [collectorUrlPattern],
         propagateTraceHeaderCorsUrls: traceHeaderAllowList,
-        applyCustomAttributesOnSpan: (span, xhr) => redactNetworkUrl(span, xhr.responseURL)
+        applyCustomAttributesOnSpan: (span, xhr) => {
+          redactNetworkUrl(span, xhr.responseURL);
+          setHttpResponseStatus(span, xhr);
+        }
       })
     );
   }
@@ -53,4 +59,11 @@ function fetchResultUrl(request: Request | RequestInit, result: unknown): string
 
 function isRequest(value: unknown): value is Request {
   return typeof Request !== 'undefined' && value instanceof Request;
+}
+
+function setHttpResponseStatus(span: Span, source: unknown): void {
+  if (!source || typeof source !== 'object' || !('status' in source)) return;
+  const status = (source as { status?: unknown }).status;
+  if (typeof status !== 'number' || !Number.isInteger(status) || status <= 0) return;
+  span.setAttribute('http.response.status_code', status);
 }

@@ -88,7 +88,7 @@ describe('privacy redaction', () => {
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
 
-  test('redacts network span URL attributes in OTel instrumentation hooks', () => {
+  test('redacts network span URL attributes and reports response status in OTel instrumentation hooks', () => {
     const options = normalizeOptions({
       collectorUrl: 'https://collector.example/otlp',
       enabledInstrumentations: ['network'],
@@ -100,16 +100,19 @@ describe('privacy redaction', () => {
       const fetchConfig = (instrumentations[0] as any).getConfig();
       const fetchSpan = { setAttribute: vi.fn() };
       fetchConfig.requestHook(fetchSpan, new Request('https://api.example/items?token=secret&session_id=abc'));
+      fetchConfig.applyCustomAttributesOnSpan(fetchSpan, new Request('https://api.example/items?token=secret&session_id=abc'), new Response(null, { status: 202 }));
 
       expect(fetchSpan.setAttribute).toHaveBeenCalledWith('http.url', 'https://api.example/items?token=%5BREDACTED%5D&session_id=%5BREDACTED%5D');
       expect(fetchSpan.setAttribute).toHaveBeenCalledWith('url.full', 'https://api.example/items?token=%5BREDACTED%5D&session_id=%5BREDACTED%5D');
+      expect(fetchSpan.setAttribute).toHaveBeenCalledWith('http.response.status_code', 202);
 
       const xhrConfig = (instrumentations[1] as any).getConfig();
       const xhrSpan = { setAttribute: vi.fn() };
-      xhrConfig.applyCustomAttributesOnSpan(xhrSpan, { responseURL: 'https://api.example/items?password=hunter2' });
+      xhrConfig.applyCustomAttributesOnSpan(xhrSpan, { responseURL: 'https://api.example/items?password=hunter2', status: 404 });
 
       expect(xhrSpan.setAttribute).toHaveBeenCalledWith('http.url', 'https://api.example/items?password=%5BREDACTED%5D');
       expect(xhrSpan.setAttribute).toHaveBeenCalledWith('url.full', 'https://api.example/items?password=%5BREDACTED%5D');
+      expect(xhrSpan.setAttribute).toHaveBeenCalledWith('http.response.status_code', 404);
     } finally {
       for (const instrumentation of instrumentations) instrumentation.disable();
     }
