@@ -1,5 +1,11 @@
 # @rumtrace/web-sdk
 
+## 0.3.2
+
+### Patch Changes
+
+- 6d8bcc8: New htttp status attr
+
 ## 0.3.1
 
 ### Patch Changes
