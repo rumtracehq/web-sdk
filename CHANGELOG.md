@@ -1,5 +1,11 @@
 # @rumtrace/web-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- 4f0806a: Add browser, device, OS, page, display, language, country, website version, initial user context, and error fingerprints to SDK telemetry.
+
 ## 0.3.2
 
 ### Patch Changes
