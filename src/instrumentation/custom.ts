@@ -86,7 +86,8 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
   };
   const schedule = (record: Record<string, unknown>) => {
     const attrs = record.attributes as Record<string, unknown>;
-    const key = `${attrs['error.type']}|${record.body}|${attrs['source.file']}|${attrs['source.line']}|${attrs['source.column']}`;
+    attrs['error.fingerprint'] = errorFingerprint(record.body, attrs);
+    const key = String(attrs['error.fingerprint']);
     const existing = pending.get(key);
     if (existing) {
       existing.count += 1;
@@ -250,6 +251,26 @@ function selector(element: Element): string {
 
 function currentAttributes(ctx: CustomInstrumentationContext, extra: Attributes): Attributes {
   return { ...ctx.attributes?.(), ...extra };
+}
+
+function errorFingerprint(body: unknown, attrs: Record<string, unknown>): string {
+  return fnv1a32([
+    attrs['error.type'],
+    body,
+    attrs['source.file'],
+    attrs['source.line'],
+    attrs['source.column'],
+    attrs['error.stack']
+  ].map((value) => String(value ?? '')).join('|'));
+}
+
+function fnv1a32(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 function interactionTarget(element: Element): Element {

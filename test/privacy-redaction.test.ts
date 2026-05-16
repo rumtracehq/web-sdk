@@ -53,6 +53,7 @@ describe('privacy redaction', () => {
     expect(record.attributes['error.stack']).not.toContain('secret');
     expect(record.attributes['source.file']).toContain('token=%5BREDACTED%5D');
     expect(record.attributes['source.file']).not.toContain('secret');
+    expect(record.attributes['error.fingerprint']).toMatch(/^[0-9a-f]{8}$/);
   });
 
   test('flushes pending debounced errors during cleanup', () => {
@@ -69,6 +70,29 @@ describe('privacy redaction', () => {
 
     expect(logger.emit).toHaveBeenCalledTimes(1);
     expect(logger.emit.mock.calls[0][0].attributes['error.count']).toBe(1);
+  });
+
+  test('uses the error fingerprint to debounce matching errors', () => {
+    vi.useFakeTimers();
+    const logger = { emit: vi.fn() };
+    const { cleanup } = enableCustomHarness(['error'], { logger });
+
+    for (let index = 0; index < 2; index += 1) {
+      const error = new TypeError('boom');
+      error.stack = 'TypeError: boom\n    at fn (https://app.example/main.js?token=secret:1:2)';
+      window.dispatchEvent(new ErrorEvent('error', {
+        message: 'boom',
+        filename: 'https://app.example/main.js?token=secret',
+        lineno: 1,
+        colno: 2,
+        error
+      }));
+    }
+    cleanup();
+
+    expect(logger.emit).toHaveBeenCalledTimes(1);
+    expect(logger.emit.mock.calls[0][0].attributes['error.count']).toBe(2);
+    expect(logger.emit.mock.calls[0][0].attributes['error.fingerprint']).toMatch(/^[0-9a-f]{8}$/);
   });
 
   test('observes buffered resource timing entries when supported', () => {

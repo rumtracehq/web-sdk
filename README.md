@@ -132,6 +132,8 @@ The SDK adds session, user, page, browser, device, OS, display, language, countr
 
 Web Vital logs also include `webvital.name`, `webvital.value`, `webvital.unit`, `webvital.rating`, `webvital.delta`, `webvital.id`, and, when available, `webvital.navigation_type`.
 
+Browser error logs include `error.fingerprint`, a deterministic hash built from the redacted error type, message, source location, and stack. The SDK uses the same fingerprint to debounce matching errors within the one-second error aggregation window.
+
 ## Public API
 
 ```ts
