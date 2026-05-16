@@ -10,7 +10,8 @@ import rumtrace from '@rumtrace/web-sdk';
 const rum = rumtrace.start('my web app', 'public-collector-token', {
   collectorUrl: 'https://ingest.rumtrace.com/',
   environment: 'production',
-  release: '1.2.3'
+  release: '1.2.3',
+  country: 'TR'
 });
 ```
 
@@ -58,6 +59,12 @@ const rum = start('checkout-web', 'public-collector-token', {
     'x-org-id': 'org_123'
   },
   sampleRate: 1,
+  country: 'TR',
+  websiteVersion: '2026.05.16',
+  user: {
+    id: 'user-123',
+    attributes: { plan: 'pro' }
+  },
   enabledInstrumentations: [
     'page-load',
     'route-change',
@@ -85,6 +92,9 @@ span.end();
 | `sampleRate` | `1` | Session sampling rate from `0` to `1`. Invalid values fall back to `1`. |
 | `environment` | `undefined` | Resource attribute `deployment.environment`. |
 | `release` | `undefined` | Resource attribute `service.version`. |
+| `websiteVersion` | `undefined` | Alias for `service.version` when `release` is omitted. |
+| `country` | `undefined` | User country code, emitted as `geo.country.iso_code`. Two-letter codes are uppercased. |
+| `user` | `undefined` | Initial user. Pass a string user id or `{ id, attributes }`; maps to `enduser.id` and `enduser.*`. |
 | `enabledInstrumentations` | core browser instrumentations | Limits which instrumentations are registered. |
 | `propagateTraceHeaders` | `false` | Enables trace header propagation for allowed network destinations. |
 | `propagateTraceHeadersAllowList` | `[]` | String or RegExp URL allow-list for propagation. String entries match exact origins or URL path prefixes after `new URL(entry, location.href)` normalization. |
@@ -98,6 +108,29 @@ span.end();
 Compressed batches are sent with `Content-Encoding: gzip`. Configure the collector or proxy in front of it to accept gzip-encoded OTLP/HTTP requests.
 
 RegExp entries in `propagateTraceHeadersAllowList` are used as provided and can match any URL, so treat them as user-owned propagation policy.
+
+## Automatic Context
+
+The SDK adds session, user, page, browser, device, OS, display, language, country, and version context to SDK-owned telemetry. Web Vitals are emitted as log records and include the same context, so LCP, INP, CLS, FCP, and TTFB can be grouped by these fields.
+
+| Attribute | Source |
+| --- | --- |
+| `session.id`, `session.sampled` | SDK session manager. |
+| `enduser.id`, `enduser.*` | `options.user` and `rum.setUser()`. |
+| `service.version` | `options.release` or `options.websiteVersion`. |
+| `deployment.environment` | `options.environment`. |
+| `geo.country.iso_code` | `options.country`. |
+| `browser.name`, `browser.version` | User agent detection. |
+| `browser.language` | `navigator.language` or first `navigator.languages` entry. |
+| `device.type`, `device.model` | User agent detection. |
+| `os.name`, `os.version` | User agent detection. |
+| `page.title` | `document.title`. |
+| `page.referrer` | `document.referrer`, with query redaction. |
+| `screen.width`, `screen.height` | `screen.width` and `screen.height`. |
+| `screen.avail_width`, `screen.avail_height` | `screen.availWidth` and `screen.availHeight`. |
+| `viewport.width`, `viewport.height` | `window.innerWidth` and `window.innerHeight`. |
+
+Web Vital logs also include `webvital.name`, `webvital.value`, `webvital.unit`, `webvital.rating`, `webvital.delta`, `webvital.id`, and, when available, `webvital.navigation_type`.
 
 ## Public API
 
@@ -164,7 +197,7 @@ Invalid initialization arguments return a no-op `RumInstance`, so host applicati
 - `authorization`
 - any key in `options.redact.urlQueryKeys`
 
-Route, resource, network, and router-adapter URL attributes use the same query redaction policy. Browser error messages are truncated to 1024 characters, and error stacks are truncated to 4096 characters.
+Route, resource, network, router-adapter, and `page.referrer` URL attributes use the same query redaction policy. Browser error messages are truncated to 1024 characters, and error stacks are truncated to 4096 characters.
 
 Pass the same `redact` object to the optional Next.js router adapters when you use custom query keys there.
 

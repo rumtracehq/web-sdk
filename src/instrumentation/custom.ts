@@ -14,6 +14,7 @@ export interface CustomInstrumentationContext {
   session: SessionManager;
   options: NormalizedOptions;
   isolator: ErrorIsolator;
+  attributes?: () => Attributes;
 }
 
 export function enableCustomInstrumentations(ctx: CustomInstrumentationContext): Array<() => void> {
@@ -36,11 +37,11 @@ function enableRouteChange(ctx: CustomInstrumentationContext): () => void {
     ctx.isolator.guard('route-change', () => {
       const redactedTo = redactUrl(to, ctx.options.redact?.urlQueryKeys);
       const span = ctx.tracer.startSpan('routeChange', {
-        attributes: {
+        attributes: currentAttributes(ctx, {
           'route.trigger': trigger,
           'route.from': redactUrl(from, ctx.options.redact?.urlQueryKeys),
           'route.to': redactedTo
-        }
+        })
       });
       ctx.session.setRouteCurrent(redactedTo);
       requestAnimationFrameSafe(() => span.end());
@@ -100,13 +101,13 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
       severityText: 'ERROR',
       severityNumber: 17,
       body: truncate(event.message, MAX_ERROR_MESSAGE_LENGTH),
-      attributes: {
+      attributes: currentAttributes(ctx, {
         'error.type': event.error?.name ?? 'Error',
         'error.stack': truncate(redactStackTrace(event.error?.stack ?? '', ctx.options.redact?.urlQueryKeys), MAX_ERROR_STACK_LENGTH),
         'source.file': redactUrl(event.filename ?? '', ctx.options.redact?.urlQueryKeys),
         'source.line': event.lineno ?? 0,
         'source.column': event.colno ?? 0
-      }
+      })
     });
   }, undefined);
 
@@ -116,10 +117,10 @@ function enableErrorLogs(ctx: CustomInstrumentationContext): () => void {
       severityText: 'ERROR',
       severityNumber: 17,
       body: truncate(reason instanceof Error ? reason.message : stringify(reason), MAX_ERROR_MESSAGE_LENGTH),
-      attributes: {
+      attributes: currentAttributes(ctx, {
         'error.type': 'UnhandledPromiseRejection',
         'error.stack': truncate(redactStackTrace(reason instanceof Error ? reason.stack ?? '' : '', ctx.options.redact?.urlQueryKeys), MAX_ERROR_STACK_LENGTH)
-      }
+      })
     });
   }, undefined);
 
@@ -144,7 +145,7 @@ function enableInteractions(ctx: CustomInstrumentationContext): () => void {
     const text = redactInteractionText(target, target.textContent?.trim() ?? '');
     const targetLabel = interactionLabel(target, text);
     const span = ctx.tracer.startSpan('userInteraction', {
-      attributes: {
+      attributes: currentAttributes(ctx, {
         'interaction.type': event.type,
         'target.tag': target.tagName.toLowerCase(),
         'target.id': target.id,
@@ -153,7 +154,7 @@ function enableInteractions(ctx: CustomInstrumentationContext): () => void {
         'target.label': targetLabel,
         'target.text': text,
         'target.selector': selector(target)
-      }
+      })
     });
     span.end();
   }, undefined);
@@ -171,14 +172,14 @@ function enableWebVitals(ctx: CustomInstrumentationContext): () => void {
   const emit = (metric: any, unit: string) => {
     ctx.isolator.guard('web-vitals-emit', () => {
       if (disposed) return;
-      const attributes: Attributes = {
+      const attributes: Attributes = currentAttributes(ctx, {
         'webvital.name': metric.name,
         'webvital.value': metric.value,
         'webvital.unit': unit,
         'webvital.rating': metric.rating,
         'webvital.delta': metric.delta,
         'webvital.id': metric.id
-      };
+      });
       if (metric.navigationType !== undefined) attributes['webvital.navigation_type'] = metric.navigationType;
       ctx.logger.emit({
         severityText: 'INFO',
@@ -213,13 +214,13 @@ function enableResourceTiming(ctx: CustomInstrumentationContext): () => void {
         if (seen.has(key)) continue;
         seen.add(key);
         const span = ctx.tracer.startSpan('resourceFetch', {
-          attributes: {
+          attributes: currentAttributes(ctx, {
             'http.url': redactUrl(entry.name, ctx.options.redact?.urlQueryKeys),
             'resource.initiator_type': entry.initiatorType,
             'resource.transfer_size': entry.transferSize,
             'resource.encoded_body_size': entry.encodedBodySize,
             'resource.decoded_body_size': entry.decodedBodySize
-          }
+          })
         });
         span.end();
       }
@@ -245,6 +246,10 @@ function selector(element: Element): string {
     current = current.parentElement;
   }
   return parts.join(' > ');
+}
+
+function currentAttributes(ctx: CustomInstrumentationContext, extra: Attributes): Attributes {
+  return { ...ctx.attributes?.(), ...extra };
 }
 
 function interactionTarget(element: Element): Element {

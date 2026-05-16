@@ -52,11 +52,28 @@ describe('web vitals instrumentation', () => {
 
     expect(logger.emit).not.toHaveBeenCalled();
   });
+
+  test('includes current SDK attributes on web vital logs', async () => {
+    const { callbacks, enable } = await enableWebVitalsHarness();
+    const { logger } = enable({ attributes: () => ({ 'enduser.id': 'user-1', 'browser.name': 'Chrome' }) });
+
+    await vi.dynamicImportSettled();
+    callbacks.FCP?.(metric('FCP', 2700));
+
+    expect(logger.emit).toHaveBeenCalledWith(expect.objectContaining({
+      attributes: expect.objectContaining({
+        'webvital.name': 'FCP',
+        'webvital.value': 2700,
+        'enduser.id': 'user-1',
+        'browser.name': 'Chrome'
+      })
+    }));
+  });
 });
 
 async function enableWebVitalsHarness(): Promise<{
   callbacks: Partial<Record<MetricName, (metric: TestWebVitalMetric) => void>>;
-  enable: () => { logger: { emit: ReturnType<typeof vi.fn> }; cleanup: () => void };
+  enable: (overrides?: { attributes?: () => Record<string, string> }) => { logger: { emit: ReturnType<typeof vi.fn> }; cleanup: () => void };
 }> {
   const callbacks: Partial<Record<MetricName, (metric: TestWebVitalMetric) => void>> = {};
   const register = (name: MetricName) => vi.fn((callback: (metric: TestWebVitalMetric) => void) => {
@@ -79,7 +96,7 @@ async function enableWebVitalsHarness(): Promise<{
 
   return {
     callbacks,
-    enable: () => {
+    enable: (overrides = {}) => {
       const logger = { emit: vi.fn() };
       const options = normalizeOptions({
         collectorUrl: 'https://collector.example/otlp',
@@ -90,7 +107,8 @@ async function enableWebVitalsHarness(): Promise<{
         logger,
         session: {},
         options: options!,
-        isolator: new ErrorIsolator()
+        isolator: new ErrorIsolator(),
+        attributes: overrides.attributes
       } as never);
       return { logger, cleanup: () => cleanups.forEach((cleanup) => cleanup()) };
     }

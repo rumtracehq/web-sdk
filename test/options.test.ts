@@ -45,6 +45,12 @@ describe('normalizeOptions', () => {
     expect(options?.sampleRate).toBe(0.25);
   });
 
+  test('websiteVersion is used as release when release is omitted', () => {
+    const options = normalizeOptions({ collectorUrl: 'https://collector.example/otlp', websiteVersion: '2026.05.16' }, new ErrorIsolator());
+
+    expect(options?.release).toBe('2026.05.16');
+  });
+
   test('authorization header override is accepted and warned about', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 

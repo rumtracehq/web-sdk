@@ -7,7 +7,8 @@ export class AttributeStore {
 
   constructor(
     private readonly session: SessionManager,
-    private readonly users: UserIdentifierStore
+    private readonly users: UserIdentifierStore,
+    private readonly baseAttributes: Attributes | (() => Attributes) = {}
   ) {}
 
   setGlobalAttribute(key: string, value: AttributeValue): void {
@@ -19,7 +20,9 @@ export class AttributeStore {
   }
 
   current(extra: Attributes = {}): Attributes {
+    const baseAttributes = typeof this.baseAttributes === 'function' ? this.baseAttributes() : this.baseAttributes;
     const out: Attributes = {
+      ...baseAttributes,
       'session.id': this.session.id,
       'session.sampled': this.session.sampled,
       ...Object.fromEntries(this.globalAttributes),

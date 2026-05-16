@@ -4,6 +4,7 @@ import { createNoopRumInstance } from './core/noop';
 import { normalizeOptions } from './core/options';
 import { SessionManager } from './core/session';
 import { UserIdentifierStore } from './core/user';
+import { browserContextAttributes } from './core/browser-context';
 import { AttributeStore } from './otel/attributes';
 import { setupOpenTelemetry } from './otel/setup';
 import { registerOtelInstrumentations } from './instrumentation/otel';
@@ -11,7 +12,7 @@ import { enableCustomInstrumentations } from './instrumentation/custom';
 import { enableFetchTracePropagation } from './instrumentation/fetch-propagation';
 import { OpenTelemetryRumInstance } from './instance';
 
-export type { AttributeValue, Attributes, InstrumentationName, LogApi, RumInstance, RumOptions, Severity, SpanHandle, TelemetryBatchMetadata } from './types';
+export type { AttributeValue, Attributes, InstrumentationName, LogApi, RumInstance, RumOptions, RumUserOptions, Severity, SpanHandle, TelemetryBatchMetadata } from './types';
 export { redactHeaders, redactInteractionText, redactUrl } from './core/redactor';
 
 declare global {
@@ -45,12 +46,14 @@ export function start(appName: string, authToken: string, options?: RumOptions):
     }
 
     const users = new UserIdentifierStore(isolator);
-    const attributes = new AttributeStore(session, users);
+    setInitialUser(users, normalized.user);
+    const contextAttributes = browserContextAttributes(normalized);
+    const attributes = new AttributeStore(session, users, () => browserContextAttributes(normalized));
     const runtime = setupOpenTelemetry(
       appName,
       authToken,
       normalized,
-      { 'session.id': session.id, 'session.sampled': session.sampled },
+      { ...contextAttributes, 'session.id': session.id, 'session.sampled': session.sampled, ...users.resourceAttributes() },
       () => attributes.current(),
       isolator
     );
@@ -67,12 +70,21 @@ export function start(appName: string, authToken: string, options?: RumOptions):
         logger: runtime.logger,
         session,
         options: normalized,
-        isolator
+        isolator,
+        attributes: () => attributes.current()
       })
     ];
     instance.addCleanup(cleanup);
     return setActiveInstance(instance);
   }, createNoopRumInstance());
+}
+
+function setInitialUser(users: UserIdentifierStore, user: RumOptions['user']): void {
+  if (typeof user === 'string') {
+    users.setUser(user);
+    return;
+  }
+  if (user && typeof user === 'object') users.setUser(user.id, user.attributes);
 }
 
 function getActiveInstance(): RumInstance | undefined {

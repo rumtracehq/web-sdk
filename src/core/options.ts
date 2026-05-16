@@ -17,6 +17,7 @@ export interface NormalizedOptions extends RumOptions {
   collectorUrl: string;
   headers: Record<string, string>;
   sampleRate: number;
+  release?: string;
   enabledInstrumentations: InstrumentationName[];
   propagateTraceHeaders: boolean;
   propagateTraceHeadersAllowList: Array<string | RegExp>;
@@ -39,6 +40,7 @@ export function normalizeOptions(options: RumOptions | undefined, isolator: Erro
 
   const enabledInstrumentations = options?.enabledInstrumentations ?? ALL_INSTRUMENTATIONS;
   const headers = options?.headers ?? {};
+  const release = firstNonEmpty([options?.release, options?.websiteVersion]);
   if (Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')) {
     isolator.warn('authorization-header-override', 'options.headers overrides the built-in Authorization header');
   }
@@ -48,6 +50,7 @@ export function normalizeOptions(options: RumOptions | undefined, isolator: Erro
     collectorUrl,
     headers,
     sampleRate,
+    release,
     enabledInstrumentations,
     propagateTraceHeaders: options?.propagateTraceHeaders ?? false,
     propagateTraceHeadersAllowList: options?.propagateTraceHeadersAllowList ?? [],
@@ -58,4 +61,8 @@ export function normalizeOptions(options: RumOptions | undefined, isolator: Erro
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
+}
+
+function firstNonEmpty(values: Array<string | undefined>): string | undefined {
+  return values.find((value) => typeof value === 'string' && value.trim() !== '')?.trim();
 }

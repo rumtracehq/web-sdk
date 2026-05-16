@@ -3,6 +3,11 @@ export type Severity = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
 export type AttributeValue = string | number | boolean | Array<string | number | boolean>;
 export type Attributes = Record<string, AttributeValue>;
 
+export interface RumUserOptions {
+  id: string;
+  attributes?: Attributes;
+}
+
 export type InstrumentationName =
   | 'page-load'
   | 'route-change'
@@ -21,6 +26,9 @@ export interface RumOptions {
   sampleRate?: number;
   environment?: string;
   release?: string;
+  websiteVersion?: string;
+  country?: string;
+  user?: string | RumUserOptions;
   enabledInstrumentations?: InstrumentationName[];
   propagateTraceHeaders?: boolean;
   propagateTraceHeadersAllowList?: Array<string | RegExp>;
