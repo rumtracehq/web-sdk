@@ -1,5 +1,11 @@
 # @rumtrace/web-sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- 622bda5: Add an `ignoreUrls` SDK option for excluding application URLs from network instrumentation.
+
 ## 0.4.0
 
 ### Minor Changes
