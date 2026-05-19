@@ -19,6 +19,7 @@ export interface NormalizedOptions extends RumOptions {
   sampleRate: number;
   release?: string;
   enabledInstrumentations: InstrumentationName[];
+  ignoreUrls: Array<string | RegExp>;
   propagateTraceHeaders: boolean;
   propagateTraceHeadersAllowList: Array<string | RegExp>;
   captureBodies: boolean;
@@ -52,6 +53,7 @@ export function normalizeOptions(options: RumOptions | undefined, isolator: Erro
     sampleRate,
     release,
     enabledInstrumentations,
+    ignoreUrls: options?.ignoreUrls ?? [],
     propagateTraceHeaders: options?.propagateTraceHeaders ?? false,
     propagateTraceHeadersAllowList: options?.propagateTraceHeadersAllowList ?? [],
     captureBodies: options?.captureBodies ?? false,

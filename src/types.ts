@@ -30,6 +30,7 @@ export interface RumOptions {
   country?: string;
   user?: string | RumUserOptions;
   enabledInstrumentations?: InstrumentationName[];
+  ignoreUrls?: Array<string | RegExp>;
   propagateTraceHeaders?: boolean;
   propagateTraceHeadersAllowList?: Array<string | RegExp>;
   captureBodies?: boolean;

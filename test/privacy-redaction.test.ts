@@ -116,12 +116,14 @@ describe('privacy redaction', () => {
     const options = normalizeOptions({
       collectorUrl: 'https://collector.example/otlp',
       enabledInstrumentations: ['network'],
+      ignoreUrls: ['https://api.example/internal', /\/health$/],
       redact: { urlQueryKeys: ['session_id'] }
     }, new ErrorIsolator());
     const instrumentations = registerOtelInstrumentations(options!);
 
     try {
       const fetchConfig = (instrumentations[0] as any).getConfig();
+      expect(fetchConfig.ignoreUrls).toEqual(expect.arrayContaining(['https://api.example/internal', /\/health$/]));
       const fetchSpan = { setAttribute: vi.fn() };
       fetchConfig.requestHook(fetchSpan, new Request('https://api.example/items?token=secret&session_id=abc'));
       fetchConfig.applyCustomAttributesOnSpan(fetchSpan, new Request('https://api.example/items?token=secret&session_id=abc'), new Response(null, { status: 202 }));
@@ -131,6 +133,7 @@ describe('privacy redaction', () => {
       expect(fetchSpan.setAttribute).toHaveBeenCalledWith('http.response.status_code', 202);
 
       const xhrConfig = (instrumentations[1] as any).getConfig();
+      expect(xhrConfig.ignoreUrls).toEqual(fetchConfig.ignoreUrls);
       const xhrSpan = { setAttribute: vi.fn() };
       xhrConfig.applyCustomAttributesOnSpan(xhrSpan, { responseURL: 'https://api.example/items?password=hunter2', status: 404 });
 

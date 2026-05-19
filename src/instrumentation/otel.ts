@@ -15,6 +15,7 @@ export function registerOtelInstrumentations(
   const enabled = new Set<InstrumentationName>(options.enabledInstrumentations);
   const instrumentations: Array<{ disable(): void }> = [];
   const collectorUrlPattern = traceHeaderUrlPattern(options.collectorUrl);
+  const ignoreUrls = [collectorUrlPattern, ...options.ignoreUrls];
   const traceHeaderAllowList = options.propagateTraceHeaders ? normalizeTraceHeaderAllowList(options.propagateTraceHeadersAllowList) : [];
   const redactNetworkUrl = (span: Span, rawUrl: string | undefined) => {
     if (!rawUrl) return;
@@ -26,7 +27,7 @@ export function registerOtelInstrumentations(
   if (enabled.has('network')) {
     instrumentations.push(
       new FetchInstrumentation({
-        ignoreUrls: [collectorUrlPattern],
+        ignoreUrls,
         propagateTraceHeaderCorsUrls: traceHeaderAllowList,
         requestHook: (span, request) => redactNetworkUrl(span, isRequest(request) ? request.url : undefined),
         applyCustomAttributesOnSpan: (span, request, result) => {
@@ -35,7 +36,7 @@ export function registerOtelInstrumentations(
         }
       }),
       new XMLHttpRequestInstrumentation({
-        ignoreUrls: [collectorUrlPattern],
+        ignoreUrls,
         propagateTraceHeaderCorsUrls: traceHeaderAllowList,
         applyCustomAttributesOnSpan: (span, xhr) => {
           redactNetworkUrl(span, xhr.responseURL);

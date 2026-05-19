@@ -96,6 +96,7 @@ span.end();
 | `country` | `undefined` | User country code, emitted as `geo.country.iso_code`. Two-letter codes are uppercased. |
 | `user` | `undefined` | Initial user. Pass a string user id or `{ id, attributes }`; maps to `enduser.id` and `enduser.*`. |
 | `enabledInstrumentations` | core browser instrumentations | Limits which instrumentations are registered. |
+| `ignoreUrls` | `[]` | String or RegExp URL matchers excluded from fetch and XHR network instrumentation. The collector URL is always ignored. |
 | `propagateTraceHeaders` | `false` | Enables trace header propagation for allowed network destinations. |
 | `propagateTraceHeadersAllowList` | `[]` | String or RegExp URL allow-list for propagation. String entries match exact origins or URL path prefixes after `new URL(entry, location.href)` normalization. |
 | `captureBodies` | `false` | Reserved for network body capture. Bodies are not captured by default. |

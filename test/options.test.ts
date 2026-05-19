@@ -16,6 +16,7 @@ describe('normalizeOptions', () => {
     expect(options?.collectorUrl).toBe('https://collector.example/otlp');
     expect(options?.sampleRate).toBe(1);
     expect(options?.enabledInstrumentations).toEqual(ALL_INSTRUMENTATIONS);
+    expect(options?.ignoreUrls).toEqual([]);
     expect(options?.propagateTraceHeaders).toBe(false);
     expect(options?.captureBodies).toBe(false);
     expect(options?.payloadCompression).toBe('gzip');
